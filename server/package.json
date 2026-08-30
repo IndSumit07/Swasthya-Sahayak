@@ -1,0 +1,43 @@
+{
+  "name": "server",
+  "version": "1.0.0",
+  "description": "TypeScript Node Express Server for Swasthya Sahayak",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "nodemon",
+    "build": "rimraf dist && tsc",
+    "start": "node dist/server.js",
+    "clean": "rimraf dist"
+  },
+  "keywords": [
+    "typescript",
+    "node",
+    "express",
+    "backend"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@prisma/client": "^6.4.1",
+    "@supabase/supabase-js": "^2.49.1",
+    "bullmq": "^6.3.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "helmet": "^8.0.0",
+    "ioredis": "^6.0.0",
+    "mongoose": "^8.12.1",
+    "morgan": "^1.10.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/morgan": "^1.9.9",
+    "@types/node": "^22.13.9",
+    "nodemon": "^3.1.9",
+    "prisma": "^6.4.1",
+    "rimraf": "^6.0.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.2"
+  }
+}
