@@ -1,8 +1,11 @@
 import Navbar from "@/components/Navbar";
 import HeroSection from "@/components/HeroSection";
 import HeroBentoGrid from "@/components/HeroBentoGrid";
+import CareWorkflowSection from "@/components/CareWorkflowSection";
+import PlatformPersonasSection from "@/components/PlatformPersonasSection";
 import ServicesSection from "@/components/ServicesSection";
 import DiagnosticsSection from "@/components/DiagnosticsSection";
+import ImpactMetricsSection from "@/components/ImpactMetricsSection";
 import Footer from "@/components/Footer";
 
 export default function Home() {
@@ -12,8 +15,11 @@ export default function Home() {
         <Navbar />
         <HeroSection />
         <HeroBentoGrid />
+        <CareWorkflowSection />
+        <PlatformPersonasSection />
         <ServicesSection />
         <DiagnosticsSection />
+        <ImpactMetricsSection />
         <Footer />
       </div>
     </div>

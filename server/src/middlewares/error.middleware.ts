@@ -14,14 +14,21 @@ export const notFoundHandler = (req: Request, res: Response): void => {
 
 // Global Error Handler Middleware
 export const errorHandler = (
-  err: Error & { status?: number; statusCode?: number },
+  err: Error & { status?: number; statusCode?: number; code?: string; meta?: { target?: string[] } },
   _req: Request,
   res: Response,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _next: NextFunction
 ): void => {
-  const statusCode = err.statusCode || err.status || 500;
-  const message = err.message || 'Internal Server Error';
+  let statusCode = err.statusCode || err.status || 500;
+  let message = err.message || 'Internal Server Error';
+
+  // Handle Prisma unique constraint violation (P2002)
+  if (err.code === 'P2002') {
+    statusCode = 409;
+    const target = err.meta?.target ? (Array.isArray(err.meta.target) ? err.meta.target.join(', ') : err.meta.target) : 'field';
+    message = `A record with this ${target} already exists.`;
+  }
 
   logger.error(`${statusCode} - ${message} - Stack: ${err.stack}`);
 

@@ -23,8 +23,12 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${quicksand.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col font-sans bg-[#FAFAFA] text-slate-900">
+      <body
+        className="min-h-full flex flex-col font-sans bg-[#FAFAFA] text-slate-900"
+        suppressHydrationWarning
+      >
         {children}
       </body>
     </html>

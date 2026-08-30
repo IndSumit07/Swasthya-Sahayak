@@ -1,30 +1,39 @@
 import { createClient } from '@supabase/supabase-js';
 import { env } from './env';
-import { logger } from '../utils/logger';
 
-// Default Supabase client with anon key
-export const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY);
+// Admin client using the Service Role key — NEVER exposed to the browser.
+// Used server-side only for admin operations.
+export const supabaseAdmin = createClient(
+  env.SUPABASE_URL,
+  env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_ANON_KEY,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  }
+);
 
-// Admin / Service Role Supabase client (used for backend admin operations like user management)
-export const supabaseAdmin = env.SUPABASE_SERVICE_ROLE_KEY
-  ? createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    })
-  : null;
+// Public client for user-facing actions like signUp (which triggers verification email)
+export const supabasePublic = createClient(
+  env.SUPABASE_URL,
+  env.SUPABASE_ANON_KEY,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  }
+);
 
-export const checkSupabaseConnection = async (): Promise<boolean> => {
+/**
+ * Health-check helper — pings Supabase to confirm connectivity.
+ */
+export async function checkSupabaseConnection(): Promise<boolean> {
   try {
-    const { error } = await supabase.auth.getSession();
-    if (error) {
-      logger.warn(`Supabase Auth check notice: ${error.message}`);
-      return false;
-    }
-    return true;
-  } catch (err: unknown) {
-    logger.error('Supabase connection check failed:', err);
+    const { error } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1 });
+    return !error;
+  } catch {
     return false;
   }
-};
+}

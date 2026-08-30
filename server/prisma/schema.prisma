@@ -10,3 +10,138 @@ datasource db {
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  PATIENT
+  HEALTH_WORKER
+  DOCTOR
+  FACILITY_ADMIN
+  DISTRICT_ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  PENDING_VERIFICATION
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  PREFER_NOT_TO_SAY
+}
+
+enum RegistrationStep {
+  CREDENTIALS
+  EMAIL_VERIFIED
+  PROFILE_STEP_1
+  PROFILE_STEP_2
+  COMPLETE
+}
+
+// ─── Core Identity ────────────────────────────────────────────────────────────
+
+// Mirrors supabase auth.users 1:1 by id.
+// `role` is ONLY read from this table for authorization — never from JWT claims.
+model User {
+  id            String     @id // == supabase auth.users.id (UUID)
+  role          UserRole
+  status        UserStatus @default(PENDING_VERIFICATION)
+  fullName      String     @map("full_name")
+  phone         String?    @unique
+  email         String?    @unique
+  avatarUrl     String?    @map("avatar_url")
+  preferredLang String     @default("en") @map("preferred_lang")
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @updatedAt @map("updated_at")
+
+  patient              Patient?
+  healthWorker         HealthWorker?
+  doctor               Doctor?
+  registrationProgress RegistrationProgress?
+
+  @@map("users")
+}
+
+// Tracks multi-step registration funnel progress per user.
+model RegistrationProgress {
+  id          String           @id @default(uuid())
+  userId      String           @unique @map("user_id")
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currentStep RegistrationStep @default(CREDENTIALS) @map("current_step")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  @@map("registration_progress")
+}
+
+// ─── Patient ──────────────────────────────────────────────────────────────────
+
+model Patient {
+  id                    String    @id @default(uuid())
+  userId                String    @unique @map("user_id")
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  dateOfBirth           DateTime? @map("date_of_birth")
+  gender                Gender?
+  village               String?
+  district              String?
+  state                 String    @default("Maharashtra")
+  pincode               String?
+  abhaId                String?   @unique @map("abha_id")
+  bloodGroup            String?   @map("blood_group")
+  emergencyContactName  String?   @map("emergency_contact_name")
+  emergencyContactPhone String?   @map("emergency_contact_phone")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  medicalHistory MedicalHistory?
+
+  @@index([district])
+  @@map("patients")
+}
+
+model MedicalHistory {
+  id                 String   @id @default(uuid())
+  patientId          String   @unique @map("patient_id")
+  patient            Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  allergies          String[] @default([])
+  chronicConditions  String[] @default([]) @map("chronic_conditions")
+  currentMedications String[] @default([]) @map("current_medications")
+  notes              String?
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@map("medical_histories")
+}
+
+// ─── Doctor ───────────────────────────────────────────────────────────────────
+
+model Doctor {
+  id             String   @id @default(uuid())
+  userId         String   @unique @map("user_id")
+  user           User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  specialty      String?
+  qualification  String?
+  registrationNo String?  @map("registration_no")
+  facilityId     String?  @map("facility_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@map("doctors")
+}
+
+// ─── Health Worker (ASHA / ANM / CHO) ────────────────────────────────────────
+
+model HealthWorker {
+  id          String   @id @default(uuid())
+  userId      String   @unique @map("user_id")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  workerType  String?  @map("worker_type")
+  facilityId  String?  @map("facility_id")
+  villageArea String?  @map("village_area")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("health_workers")
+}

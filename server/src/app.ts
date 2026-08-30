@@ -2,6 +2,7 @@ import express, { Application } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import cookieParser from 'cookie-parser';
 import { env } from './config/env';
 import apiRoutes from './routes';
 import { errorHandler, notFoundHandler } from './middlewares/error.middleware';
@@ -13,9 +14,13 @@ app.use(helmet());
 app.use(
   cors({
     origin: env.CORS_ORIGIN,
-    credentials: true,
+    credentials: true, // required for httpOnly cookie cross-origin flow
   })
 );
+
+// Cookie Parsing (must be before routes)
+app.use(cookieParser());
+
 
 // Request Parsing
 app.use(express.json());

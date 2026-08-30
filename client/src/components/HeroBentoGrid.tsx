@@ -5,8 +5,8 @@ export default function HeroBentoGrid() {
   return (
     <section className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 items-stretch">
       {/* Card 1: Continuity of Care & Longitudinal Records */}
-      <div className="bg-[#EFF2F5] rounded-[28px] p-6 sm:p-7 flex flex-col justify-between relative overflow-hidden min-h-[220px]">
-        <div className="space-y-2 z-10 max-w-[62%]">
+      <div className="bg-[#EFF2F5] rounded-[28px] p-6 sm:p-7 flex flex-col justify-between relative overflow-hidden min-h-[220px] shadow-xs">
+        <div className="space-y-2 z-10 sm:max-w-[62%]">
           <span className="text-[11px] font-bold uppercase tracking-wider text-[#0E4A43]">
             Zero Information Loss
           </span>
@@ -19,19 +19,19 @@ export default function HeroBentoGrid() {
         </div>
 
         {/* Visual Preview */}
-        <div className="absolute -bottom-2 -right-3 w-40 h-36 rounded-2xl overflow-hidden shadow-sm">
+        <div className="relative sm:absolute -bottom-2 -right-3 w-full sm:w-40 h-28 sm:h-36 rounded-2xl overflow-hidden shadow-xs mt-4 sm:mt-0">
           <Image
             src="/doctor_patient.jpg"
             alt="Doctor Patient Care"
             fill
             className="object-cover object-top"
           />
-          <div className="absolute inset-0 bg-gradient-to-r from-[#EFF2F5] via-transparent to-transparent" />
+          <div className="hidden sm:block absolute inset-0 bg-gradient-to-r from-[#EFF2F5] via-transparent to-transparent" />
         </div>
       </div>
 
       {/* Card 2: Essential Care Checklists (Maternal, Child, NCD, Diagnostics) */}
-      <div className="bg-[#E5F973] rounded-[28px] p-6 sm:p-7 flex flex-col justify-between min-h-[220px] text-slate-950">
+      <div className="bg-[#E5F973] rounded-[28px] p-6 sm:p-7 flex flex-col justify-between min-h-[220px] text-slate-950 shadow-xs">
         <div>
           <span className="text-[11px] font-black uppercase tracking-wider text-slate-800">
             High-Risk Follow-up
@@ -63,7 +63,7 @@ export default function HeroBentoGrid() {
         </div>
 
         <Link
-          href="#programs"
+          href="/register"
           className="text-xs sm:text-sm font-extrabold text-slate-950 hover:underline flex items-center gap-1 mt-4 pt-2 font-heading"
         >
           <span>Explore High-Risk Registry</span>
@@ -72,7 +72,7 @@ export default function HeroBentoGrid() {
       </div>
 
       {/* Card 3: Real-Time Availability & Accountability */}
-      <div className="bg-[#EFF2F5] rounded-[28px] p-6 sm:p-7 flex flex-col justify-between relative overflow-hidden min-h-[220px]">
+      <div className="bg-[#EFF2F5] rounded-[28px] p-6 sm:p-7 flex flex-col justify-between relative overflow-hidden min-h-[220px] shadow-xs">
         <div className="space-y-2 z-10">
           <span className="text-[11px] font-bold uppercase tracking-wider text-[#0E4A43]">
             Facility Dashboards
@@ -81,7 +81,7 @@ export default function HeroBentoGrid() {
             Medicine &amp; Diagnostic Visibility
           </h3>
           <p className="text-xs text-slate-600 leading-relaxed max-w-[90%] font-normal">
-            Real-time stock alerts for essential drugs, specialist doctor roasters, and reduced waiting times.
+            Real-time stock alerts for essential drugs, specialist doctor rosters, and reduced waiting times.
           </p>
         </div>
 
