@@ -20,80 +20,64 @@ const personas: Persona[] = [
     id: "patient",
     roleTitle: "Patient / Citizen",
     marathiLabel: "रुग्ण / नागरिक",
-    scope: "Own Health Records Only",
-    tagline: "Lifelong digital health records, teleconsultations & medicine access",
-    description: "Empowering rural citizens with instant appointment booking at local PHCs, assisted teleconsultations with city specialists, and SMS/WhatsApp medicine availability alerts.",
+    scope: "For Patients & Families",
+    tagline: "Find nearby care, live hospital beds & digital prescriptions",
+    description: "Search for the nearest health centre, check available beds before leaving home, consult doctors online, and access your prescriptions and medical history on your phone.",
     keyFeatures: [
-      "Linked ABHA ID for zero paper record loss",
-      "Point-of-care digital prescriptions & lab reports",
-      "Inter-facility referral tracking from village to hospital",
-      "Multilingual teleconsultations in Marathi, Hindi & English",
+      "Find nearby Primary Health Centres (PHCs) & Civil Hospitals",
+      "Check live general and ICU bed availability in real-time",
+      "Online doctor teleconsultations in your regional language",
+      "Easy access to digital prescriptions & lab test records",
     ],
-    ctaText: "Register as Citizen / Patient",
+    ctaText: "Patient Sign In / Register",
     ctaHref: "/register",
   },
   {
     id: "health_worker",
     roleTitle: "Frontline Health Worker (ASHA / ANM)",
     marathiLabel: "आशा / एएनएम सेविका",
-    scope: "Assigned Facility & Village Catchment",
-    tagline: "Doorstep clinical triage, maternal tracking & assisted kiosk OPD",
-    description: "Built for low-bandwidth and offline environments. ASHA and ANM workers record patient vitals, initiate tele-consults for village kiosks, and conduct high-risk maternal follow-ups.",
+    scope: "For Village Health Workers",
+    tagline: "Doorstep symptom check-ups & assisted doctor consultations",
+    description: "Built for easy use on mobile devices. ASHA and ANM workers assist village families with symptom evaluations, connect patients with doctors via tele-OPD, and organize hospital transfers.",
     keyFeatures: [
-      "Offline-first mobile data capture with auto-sync",
-      "Rule-based maternal ANC/PNC & child immunization alerts",
-      "Assisted teleconsultation initiation for elderly/critical patients",
-      "Direct referral escalation to nearest PHC/CHC",
+      "Quick and simple patient check-in on mobile phones",
+      "Connect village patients to online doctor video/audio calls",
+      "Maternal and child immunization reminders",
+      "Direct referral escalation to nearest hospital",
     ],
-    ctaText: "Access Frontline Desk",
+    ctaText: "Health Worker Portal",
     ctaHref: "/login",
   },
   {
     id: "doctor",
     roleTitle: "Doctor & Specialist",
-    marathiLabel: "वैद्यकीय अधिकारी / तज्ज्ञ डॉक्टर",
-    scope: "Active Consultations & Referrals",
-    tagline: "Tele-OPD queue management, digital prescribing & referral generation",
-    description: "Specialists in District Hospitals and Medical Colleges provide expert consultations to rural patients, review full longitudinal medical history, and issue verified e-prescriptions.",
+    marathiLabel: "वैद्यकीय अधिकारी / डॉक्टर",
+    scope: "For Registered Doctors",
+    tagline: "Online consultation queue, patient history & e-prescriptions",
+    description: "Qualified doctors and medical specialists consult rural and remote patients, review past health records, and issue verified digital prescriptions in minutes.",
     keyFeatures: [
-      "Interactive Tele-OPD consultation workbench",
-      "Access to patient's full longitudinal health history",
-      "Instant e-prescription with local PHC stock check",
-      "Specialist referral generation with priority flags",
+      "Clean consultation queue and tele-OPD workbench",
+      "Review patient symptoms and medical background",
+      "Write digital prescriptions with local medicine check",
+      "Generate specialist hospital referral notes",
     ],
     ctaText: "Doctor Portal Sign In",
     ctaHref: "/login",
   },
   {
     id: "facility_admin",
-    roleTitle: "Health Facility Administrator",
+    roleTitle: "Hospital & Facility Admin",
     marathiLabel: "आरोग्य केंद्र प्रशासक",
-    scope: "Facility-Level Operations",
-    tagline: "Real-time doctor rosters, bed inventory, medicine stock & queue tracking",
-    description: "Facility superintendents at PHCs, CHCs, and Sub-District Hospitals manage appointment quotas, monitor daily waiting times, and prevent stock-outs of essential medicines.",
+    scope: "For Clinic & Hospital Staff",
+    tagline: "Update live bed counts, medicine supplies & doctor rosters",
+    description: "Health centre administrators manage OPD timings, update bed vacancies in real time, and ensure essential medicines stay well-stocked for the community.",
     keyFeatures: [
-      "Live medicine inventory & essential drug stock management",
-      "Doctor duty rosters & tele-OPD slot configuration",
-      "Inpatient bed occupancy & observation ward status",
-      "Real-time token and waiting time monitoring",
+      "Update live general, ICU, and oxygen bed vacancy",
+      "Manage essential medicine stock and inventory alerts",
+      "Schedule doctor duty hours & OPD timings",
+      "Monitor patient check-ins and reduce wait times",
     ],
-    ctaText: "Facility Admin Portal",
-    ctaHref: "/login",
-  },
-  {
-    id: "district_admin",
-    roleTitle: "District & State Health Officer",
-    marathiLabel: "जिल्हा आरोग्य अधिकारी (DHO)",
-    scope: "District / State-Wide Aggregated Data",
-    tagline: "Public health surveillance, referral completion & quality monitoring",
-    description: "Decision-makers in Maharashtra's 36 districts monitor public health indices, track inter-facility referral dropouts, and allocate emergency resources in real-time.",
-    keyFeatures: [
-      "District-wide referral completion rate heatmaps",
-      "Epidemiological outbreak & seasonal disease alerts",
-      "PHC & CHC performance, wait-time & resource audit",
-      "Maternal & infant mortality risk surveillance",
-    ],
-    ctaText: "District Health Dashboard",
+    ctaText: "Hospital Admin Login",
     ctaHref: "/login",
   },
 ];
@@ -103,24 +87,24 @@ export default function PlatformPersonasSection() {
   const currentPersona = personas.find((p) => p.id === activeTab) ?? personas[0];
 
   return (
-    <section className="bg-white rounded-[32px] p-6 sm:p-9 lg:p-11 border border-slate-200/80 shadow-xs relative overflow-hidden">
+    <section id="portals" className="bg-white rounded-[32px] p-6 sm:p-9 lg:p-11 border border-slate-200/80 shadow-xs relative overflow-hidden">
       <div className="space-y-8">
         {/* Header */}
         <div className="space-y-2 max-w-2xl">
           <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#E5F973] text-slate-950 text-xs sm:text-sm font-bold tracking-tight">
             <span className="w-2 h-2 rounded-full bg-[#0E4A43] animate-pulse" />
-            <span>Role-Based Access Control (RBAC)</span>
+            <span>Built for Everyone</span>
           </div>
           <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-slate-950 font-heading tracking-tight leading-tight">
-            Five Roles, One Unified Public Health Platform
+            One Unified Platform for Healthcare Access
           </h2>
           <p className="text-slate-600 text-xs sm:text-sm leading-relaxed">
-            Tailored interfaces designed specifically for rural citizens, frontline healthcare workers, specialist doctors, and district health officers.
+            Tailored, user-friendly portals for patients, village health workers, doctors, and hospital administrators.
           </p>
         </div>
 
-        {/* Tab Selector — Clean Responsive Segmented Control */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 p-2 bg-[#EFF2F5] rounded-2xl sm:rounded-3xl w-full border border-slate-200/50">
+        {/* Tab Selector */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-2 bg-[#EFF2F5] rounded-2xl sm:rounded-3xl w-full border border-slate-200/50">
           {personas.map((persona) => {
             const isActive = activeTab === persona.id;
             return (
@@ -150,7 +134,7 @@ export default function PlatformPersonasSection() {
             <div className="space-y-3.5">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-slate-200 text-xs font-bold text-[#0E4A43]">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                <span>Scope: {currentPersona.scope}</span>
+                <span>{currentPersona.scope}</span>
               </div>
 
               <h3 className="text-lg sm:text-2xl font-black text-slate-950 font-heading leading-tight">
@@ -188,22 +172,22 @@ export default function PlatformPersonasSection() {
 
           <div className="lg:col-span-5 bg-white rounded-2xl p-5 sm:p-6 border border-slate-200/80 shadow-xs space-y-3.5 flex flex-col justify-between">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <span className="text-xs font-bold text-slate-900">Portal Security &amp; Compliance</span>
-              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full">ABDM Certified</span>
+              <span className="text-xs font-bold text-slate-900">Why Use Swasthya Sahayak</span>
+              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full">Fast &amp; Free</span>
             </div>
 
             <div className="space-y-2.5 text-xs">
               <div className="p-3 bg-[#EFF2F5] rounded-xl">
-                <div className="font-bold text-slate-800 mb-0.5">Data Privacy</div>
-                <div className="text-slate-500 text-[11px] leading-relaxed">Strict least-privilege RBAC matrix enforcing patient consent for medical history access.</div>
+                <div className="font-bold text-slate-800 mb-0.5">Real-Time Information</div>
+                <div className="text-slate-500 text-[11px] leading-relaxed">Accurate hospital bed vacancy, doctor timings, and medicine availability.</div>
               </div>
               <div className="p-3 bg-[#EFF2F5] rounded-xl">
-                <div className="font-bold text-slate-800 mb-0.5">Connectivity Resilient</div>
-                <div className="text-slate-500 text-[11px] leading-relaxed">Optimized for 2G/3G rural networks with full offline sync queues.</div>
+                <div className="font-bold text-slate-800 mb-0.5">Works in Remote Areas</div>
+                <div className="text-slate-500 text-[11px] leading-relaxed">Optimized to load fast on any smartphone or basic internet connection.</div>
               </div>
               <div className="p-3 bg-[#EFF2F5] rounded-xl">
-                <div className="font-bold text-slate-800 mb-0.5">104 / 108 Emergency Tie-in</div>
-                <div className="text-slate-500 text-[11px] leading-relaxed">One-click triage escalation directly connecting to emergency ambulance dispatch.</div>
+                <div className="font-bold text-slate-800 mb-0.5">24x7 Emergency Help</div>
+                <div className="text-slate-500 text-[11px] leading-relaxed">Direct links to emergency medical helpline 104 and ambulance dispatch 108.</div>
               </div>
             </div>
           </div>

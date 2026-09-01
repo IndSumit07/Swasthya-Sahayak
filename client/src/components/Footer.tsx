@@ -11,23 +11,20 @@ export default function Footer() {
             </svg>
           </div>
           <span>
-            © {new Date().getFullYear()} Swasthya Sahayak. Government of Maharashtra Initiative (PS 26133).
+            © {new Date().getFullYear()} Swasthya Sahayak • Public Healthcare Portal for Maharashtra
           </span>
         </div>
 
         <div className="flex items-center gap-6 font-medium text-slate-600">
-          <Link href="#privacy" className="hover:text-[#0E4A43] transition-colors">
-            Privacy Policy
+          <Link href="/facilities" className="hover:text-[#0E4A43] transition-colors">
+            Find Facilities
           </Link>
-          <Link href="#terms" className="hover:text-[#0E4A43] transition-colors">
-            Terms of Service
+          <Link href="/login" className="hover:text-[#0E4A43] transition-colors">
+            Portals &amp; Login
           </Link>
-          <Link href="#abdm" className="hover:text-[#0E4A43] transition-colors">
-            ABDM Compliance
-          </Link>
-          <Link href="#helpline" className="hover:text-[#0E4A43] transition-colors">
-            104 / 108 Support
-          </Link>
+          <a href="tel:104" className="text-[#0E4A43] font-bold hover:underline">
+            Helpline: 104 / 108
+          </a>
         </div>
       </div>
     </footer>

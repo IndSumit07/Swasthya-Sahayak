@@ -3,27 +3,27 @@ import Link from "next/link";
 const impactMetrics = [
   {
     value: "70%",
-    label: "Reduction in Travel Time",
-    desc: "Assisted teleconsultations and digital triage at village sub-centres save patients 4–6 hours of travel to distant hospitals.",
-    sub: "Average rural savings: ₹350/visit",
+    label: "Reduced Travel Time",
+    desc: "Online teleconsultations and live clinic information help families avoid hours of unnecessary travel.",
+    sub: "Care closer to home",
   },
   {
-    value: "99.4%",
-    label: "Referral Completion Rate",
-    desc: "Patients are no longer lost between facilities. Every transfer has confirmed beds, digital notes, and real-time status tracking.",
-    sub: "Zero lost paper case files",
+    value: "Live",
+    label: "Bed & ICU Tracker",
+    desc: "Check available general and ICU beds in advance before traveling to a community or district hospital.",
+    sub: "Real-time updates",
   },
   {
     value: "36",
     label: "Districts Covered",
-    desc: "Unified public health surveillance across Maharashtra connecting Sub-Centres, PHCs, CHCs, and District Hospitals.",
-    sub: "100% ABDM & ABHA compliant",
+    desc: "Comprehensive health directory connecting Sub-Centres, PHCs, and District Hospitals across Maharashtra.",
+    sub: "Statewide public network",
   },
   {
     value: "24×7",
-    label: "Emergency & Drug Visibility",
-    desc: "Live stock tracking for essential medicines and 1-touch escalation to 104/108 health triage and ambulance services.",
-    sub: "Real-time stockout alerts",
+    label: "Emergency Support",
+    desc: "Instant access to health advice, symptom check-up, and emergency ambulance dispatch (104 / 108).",
+    sub: "Always available",
   },
 ];
 
@@ -40,22 +40,22 @@ export default function ImpactMetricsSection() {
           <div className="space-y-2.5 max-w-2xl">
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 border border-white/15 text-[#E5F973] text-xs font-bold">
               <span className="w-2 h-2 rounded-full bg-[#E5F973] animate-pulse" />
-              <span>Public Health Impact Metrics</span>
+              <span>Public Health Impact</span>
             </div>
             <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold leading-tight tracking-tight">
-              Measurable Outcomes for Maharashtra&apos;s Rural Communities
+              Better Healthcare Access for Every Community
             </h2>
             <p className="text-emerald-100/80 text-xs sm:text-sm leading-relaxed">
-              Designed to meet the key deliverables of Problem Statement 26133 — strengthening public care delivery and clinical accountability.
+              Helping citizens, doctors, and health workers stay connected with transparent medical resources and timely care.
             </p>
           </div>
 
           <div className="flex items-center gap-3">
             <Link
-              href="/register"
+              href="/facilities"
               className="px-6 py-3 rounded-full text-xs sm:text-sm font-bold text-slate-950 bg-[#E5F973] hover:bg-[#d9ed5f] transition-all shadow-sm active:scale-95 flex items-center gap-1.5"
             >
-              <span>Get Started</span>
+              <span>Explore Facilities</span>
               <span className="text-base leading-none">&rsaquo;</span>
             </Link>
           </div>

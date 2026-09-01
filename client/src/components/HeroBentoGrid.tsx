@@ -4,17 +4,17 @@ import Link from "next/link";
 export default function HeroBentoGrid() {
   return (
     <section className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 items-stretch">
-      {/* Card 1: Continuity of Care & Longitudinal Records */}
+      {/* Card 1: Find Beds & Nearby Facilities */}
       <div className="bg-[#EFF2F5] rounded-[28px] p-6 sm:p-7 flex flex-col justify-between relative overflow-hidden min-h-[220px] shadow-xs">
         <div className="space-y-2 z-10 sm:max-w-[62%]">
           <span className="text-[11px] font-bold uppercase tracking-wider text-[#0E4A43]">
-            Zero Information Loss
+            Live Bed Tracker
           </span>
           <h3 className="text-base sm:text-lg font-bold text-slate-950 font-heading leading-snug">
-            Longitudinal Records &amp; Referrals
+            Check General &amp; ICU Beds
           </h3>
           <p className="text-xs text-slate-600 leading-relaxed font-normal">
-            Continuous patient history from Sub-Centre to District Hospital without lost paper files.
+            View available inpatient beds, oxygen beds, and emergency status in real-time across health centres.
           </p>
         </div>
 
@@ -30,58 +30,58 @@ export default function HeroBentoGrid() {
         </div>
       </div>
 
-      {/* Card 2: Essential Care Checklists (Maternal, Child, NCD, Diagnostics) */}
+      {/* Card 2: Essential Healthcare Services */}
       <div className="bg-[#E5F973] rounded-[28px] p-6 sm:p-7 flex flex-col justify-between min-h-[220px] text-slate-950 shadow-xs">
         <div>
           <span className="text-[11px] font-black uppercase tracking-wider text-slate-800">
-            High-Risk Follow-up
+            Available Services
           </span>
           <h3 className="text-base sm:text-lg font-black font-heading mb-3 mt-0.5">
-            Priority Care &amp; Health Programs:
+            Key Care &amp; Clinical Support:
           </h3>
 
           <div className="flex flex-wrap gap-1.5 sm:gap-2">
             <span className="px-2.5 py-1 bg-white rounded-full text-[11px] sm:text-xs font-bold text-slate-950 shadow-xs">
-              + Maternal &amp; ANC Tracking
+              General OPD &amp; Consults
             </span>
             <span className="px-2.5 py-1 bg-white rounded-full text-[11px] sm:text-xs font-bold text-slate-950 shadow-xs">
-              + Child Immunization
+              Maternal &amp; Child Health
             </span>
             <span className="px-2.5 py-1 bg-white rounded-full text-[11px] sm:text-xs font-bold text-slate-950 shadow-xs">
-              + Chronic NCDs (BP/Sugar)
+              Blood &amp; Lab Tests
             </span>
             <span className="px-2.5 py-1 bg-white rounded-full text-[11px] sm:text-xs font-bold text-slate-950 shadow-xs">
-              + Emergency Escalation
+              Emergency 24x7 Triage
             </span>
             <span className="px-2.5 py-1 bg-white rounded-full text-[11px] sm:text-xs font-bold text-slate-950 shadow-xs">
-              + Lab Test Coordination
+              Essential Medicine Stock
             </span>
             <span className="px-2.5 py-1 bg-white rounded-full text-[11px] sm:text-xs font-bold text-slate-950 shadow-xs">
-              + Essential Medicine Tracker
+              Hospital Referrals
             </span>
           </div>
         </div>
 
         <Link
-          href="/register"
+          href="/facilities"
           className="text-xs sm:text-sm font-extrabold text-slate-950 hover:underline flex items-center gap-1 mt-4 pt-2 font-heading"
         >
-          <span>Explore High-Risk Registry</span>
+          <span>Explore All Facilities</span>
           <span>&rsaquo;</span>
         </Link>
       </div>
 
-      {/* Card 3: Real-Time Availability & Accountability */}
+      {/* Card 3: Medicine & Doctor Availability */}
       <div className="bg-[#EFF2F5] rounded-[28px] p-6 sm:p-7 flex flex-col justify-between relative overflow-hidden min-h-[220px] shadow-xs">
         <div className="space-y-2 z-10">
           <span className="text-[11px] font-bold uppercase tracking-wider text-[#0E4A43]">
-            Facility Dashboards
+            Save Travel Time
           </span>
           <h3 className="text-base sm:text-lg font-bold text-slate-950 font-heading leading-snug">
-            Medicine &amp; Diagnostic Visibility
+            Medicine &amp; Doctor Rosters
           </h3>
           <p className="text-xs text-slate-600 leading-relaxed max-w-[90%] font-normal">
-            Real-time stock alerts for essential drugs, specialist doctor rosters, and reduced waiting times.
+            Check OPD timings, on-duty doctors, and essential medicine stock before leaving home.
           </p>
         </div>
 

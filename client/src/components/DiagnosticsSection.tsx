@@ -3,9 +3,9 @@ import Link from "next/link";
 
 export default function DiagnosticsSection() {
   return (
-    <section className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 items-stretch">
+    <section id="diagnostics" className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 items-stretch">
       
-      {/* 1. Left Card: Clinical Lab Blood Test Photo */}
+      {/* 1. Left Card: Clinical Lab Photo */}
       <div className="lg:col-span-3 xl:col-span-3 rounded-[28px] overflow-hidden relative min-h-[220px] sm:min-h-[250px] shadow-xs bg-slate-200 group">
         <Image
           src="/blood_test_lab.png"
@@ -16,53 +16,65 @@ export default function DiagnosticsSection() {
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950/40 via-transparent to-transparent pointer-events-none" />
       </div>
 
-      {/* 2. Middle Card: Express Lab Tests Information & Dual CTAs */}
+      {/* 2. Middle Card: Lab Tests Information & CTAs */}
       <div className="lg:col-span-5 xl:col-span-5 bg-[#EFF2F5] rounded-[28px] p-6 sm:p-8 flex flex-col justify-between space-y-4">
         <div>
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#E5F973] text-slate-950 text-xs font-bold mb-2.5">
+            <span>Diagnostic Support</span>
+          </div>
           <h3 className="text-2xl sm:text-3xl font-extrabold text-slate-950 font-heading tracking-tight mb-2.5">
-            Express Diagnostics &amp; Lab Tests
+            Diagnostic &amp; Lab Tests
           </h3>
           <p className="text-slate-600 text-xs sm:text-sm leading-relaxed font-normal">
-            We conduct a comprehensive range of point-of-care laboratory tests essential for early illness detection, chronic disease staging, and maternal screening across rural health centres.
+            Essential point-of-care laboratory tests conducted at government health centres for early detection, routine health checks, and maternal care.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3 pt-2">
-          <button className="px-6 py-2.5 rounded-full text-xs sm:text-sm font-bold text-white bg-[#0E4A43] hover:bg-[#083530] transition-all shadow-sm active:scale-95">
-            Book Lab Test
-          </button>
-          <button className="px-5 py-2.5 rounded-full text-xs sm:text-sm font-semibold text-slate-900 bg-white hover:bg-slate-50 border border-slate-200/80 shadow-xs flex items-center gap-1.5 transition-all">
-            <span>Learn more</span>
+          <Link
+            href="/facilities"
+            className="px-6 py-2.5 rounded-full text-xs sm:text-sm font-bold text-white bg-[#0E4A43] hover:bg-[#083530] transition-all shadow-sm active:scale-95 text-center"
+          >
+            Find Diagnostic Centres
+          </Link>
+          <Link
+            href="/facilities"
+            className="px-5 py-2.5 rounded-full text-xs sm:text-sm font-semibold text-slate-900 bg-white hover:bg-slate-50 border border-slate-200/80 shadow-xs flex items-center gap-1.5 transition-all text-center"
+          >
+            <span>Check Availability</span>
             <span className="text-base leading-none">&rsaquo;</span>
-          </button>
+          </Link>
         </div>
       </div>
 
-      {/* 3. Right Card: Diagnostic Test Badges (Lime Accent) */}
+      {/* 3. Right Card: Diagnostic Test Badges */}
       <div className="lg:col-span-4 xl:col-span-4 bg-[#E5F973] rounded-[28px] p-6 sm:p-7 flex flex-col justify-center text-slate-950">
         <div className="flex flex-wrap gap-2">
           <span className="px-3 py-1.5 bg-white rounded-full text-[11px] sm:text-xs font-bold text-slate-950 shadow-xs">
-            + Blood &amp; Complete Hemogram
+            Complete Blood Count (CBC)
           </span>
           <span className="px-3 py-1.5 bg-white rounded-full text-[11px] sm:text-xs font-bold text-slate-950 shadow-xs">
-            + Vitamins
+            Blood Sugar &amp; Diabetes Test
           </span>
           <span className="px-3 py-1.5 bg-white rounded-full text-[11px] sm:text-xs font-bold text-slate-950 shadow-xs">
-            + Liver &amp; Kidney Enzymes
+            Thyroid &amp; Hormone Screen
           </span>
           <span className="px-3 py-1.5 bg-white rounded-full text-[11px] sm:text-xs font-bold text-slate-950 shadow-xs">
-            + Specific Proteins &amp; Biomarkers
+            Liver &amp; Kidney Check
           </span>
           <span className="px-3 py-1.5 bg-white rounded-full text-[11px] sm:text-xs font-bold text-slate-950 shadow-xs">
-            + Hormonal &amp; Thyroid Screen
+            Vitamin &amp; Calcium Levels
           </span>
           <span className="px-3 py-1.5 bg-white rounded-full text-[11px] sm:text-xs font-bold text-slate-950 shadow-xs">
-            + Immunohematology
+            Urine &amp; Basic Lab Work
           </span>
-          <button className="px-3.5 py-1.5 bg-[#0E4A43] text-white rounded-full text-[11px] sm:text-xs font-bold shadow-xs hover:bg-[#083530] transition-colors flex items-center gap-1">
-            <span>More</span>
-            <span className="text-xs">↗</span>
-          </button>
+          <Link
+            href="/facilities"
+            className="px-3.5 py-1.5 bg-[#0E4A43] text-white rounded-full text-[11px] sm:text-xs font-bold shadow-xs hover:bg-[#083530] transition-colors flex items-center gap-1"
+          >
+            <span>View All</span>
+            <span className="text-xs">&rarr;</span>
+          </Link>
         </div>
       </div>
 

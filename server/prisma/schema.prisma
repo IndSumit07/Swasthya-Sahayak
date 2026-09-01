@@ -14,11 +14,12 @@ datasource db {
 // ─── Enums ────────────────────────────────────────────────────────────────────
 
 enum UserRole {
-  PATIENT
-  HEALTH_WORKER
-  DOCTOR
-  FACILITY_ADMIN
+  SUPER_ADMIN
   DISTRICT_ADMIN
+  FACILITY_ADMIN
+  DOCTOR
+  HEALTH_WORKER
+  PATIENT
 }
 
 enum UserStatus {
@@ -42,6 +43,16 @@ enum RegistrationStep {
   COMPLETE
 }
 
+enum FacilityType {
+  SUB_CENTRE
+  PHC
+  CHC
+  RURAL_HOSPITAL
+  DISTRICT_HOSPITAL
+  DIAGNOSTIC_CENTER
+  PHARMACY
+}
+
 // ─── Core Identity ────────────────────────────────────────────────────────────
 
 // Mirrors supabase auth.users 1:1 by id.
@@ -61,6 +72,8 @@ model User {
   patient              Patient?
   healthWorker         HealthWorker?
   doctor               Doctor?
+  facilityAdmin        FacilityAdmin?
+  districtAdmin        DistrictAdmin?
   registrationProgress RegistrationProgress?
 
   @@map("users")
@@ -93,6 +106,8 @@ model Patient {
   bloodGroup            String?   @map("blood_group")
   emergencyContactName  String?   @map("emergency_contact_name")
   emergencyContactPhone String?   @map("emergency_contact_phone")
+  facilityId            String?   @map("facility_id")
+  facility              Facility? @relation(fields: [facilityId], references: [id], onDelete: SetNull)
   createdAt             DateTime  @default(now()) @map("created_at")
   updatedAt             DateTime  @updatedAt @map("updated_at")
 
@@ -115,33 +130,162 @@ model MedicalHistory {
   @@map("medical_histories")
 }
 
+// ─── Admin Roles ──────────────────────────────────────────────────────────────
+
+model DistrictAdmin {
+  id        String   @id @default(uuid())
+  userId    String   @unique @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  district  String   // assigned Maharashtra district name, or "ALL" for state-level
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([district])
+  @@map("district_admins")
+}
+
+model FacilityAdmin {
+  id         String   @id @default(uuid())
+  userId     String   @unique @map("user_id")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  facilityId String   @map("facility_id")
+  facility   Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@index([facilityId])
+  @@map("facility_admins")
+}
+
 // ─── Doctor ───────────────────────────────────────────────────────────────────
 
 model Doctor {
-  id             String   @id @default(uuid())
-  userId         String   @unique @map("user_id")
-  user           User     @relation(fields: [userId], references: [id], onDelete: Restrict)
-  specialty      String?
-  qualification  String?
-  registrationNo String?  @map("registration_no")
-  facilityId     String?  @map("facility_id")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  id             String    @id @default(uuid())
+  userId         String    @unique @map("user_id")
+  user           User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  specialty      String?   // e.g. "General Medicine", "Pediatrics", "Obstetrics"
+  qualification  String?   // e.g. "MBBS, MD"
+  registrationNo String?   @map("registration_no")
+  isAvailable    Boolean   @default(true) @map("is_available")
+  facilityId     String?   @map("facility_id")
+  facility       Facility? @relation(fields: [facilityId], references: [id], onDelete: SetNull)
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
 
+  @@index([facilityId])
+  @@index([specialty])
   @@map("doctors")
 }
 
 // ─── Health Worker (ASHA / ANM / CHO) ────────────────────────────────────────
 
 model HealthWorker {
-  id          String   @id @default(uuid())
-  userId      String   @unique @map("user_id")
-  user        User     @relation(fields: [userId], references: [id], onDelete: Restrict)
-  workerType  String?  @map("worker_type")
-  facilityId  String?  @map("facility_id")
-  villageArea String?  @map("village_area")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id          String    @id @default(uuid())
+  userId      String    @unique @map("user_id")
+  user        User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  workerType  String?   @map("worker_type") // "ASHA", "ANM", "CHO"
+  villageArea String?   @map("village_area")
+  facilityId  String?   @map("facility_id")
+  facility    Facility? @relation(fields: [facilityId], references: [id], onDelete: SetNull)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
+  @@index([facilityId])
   @@map("health_workers")
+}
+
+// ─── Facilities & Resources (Module 2) ────────────────────────────────────────
+
+model Facility {
+  id           String       @id @default(uuid())
+  name         String
+  type         FacilityType
+  district     String       // e.g. "Pune", "Nashik", "Satara"
+  village      String?      // e.g. "Ambegaon", "Junnar"
+  address      String?
+  pincode      String?
+  latitude     Decimal?     @db.Decimal(9, 6)
+  longitude    Decimal?     @db.Decimal(9, 6)
+  contactPhone String?      @map("contact_phone")
+  contactEmail String?      @map("contact_email")
+  workingHours String?      @default("24x7 Emergency / 09:00 - 17:00 OPD") @map("working_hours")
+  isActive     Boolean      @default(true) @map("is_active")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  services    FacilityService[]
+  bedStatus   FacilityBedStatus?
+  medicines   FacilityMedicine[]
+  diagnostics FacilityDiagnostic[]
+  doctors     Doctor[]
+  workers     HealthWorker[]
+  admins      FacilityAdmin[]
+  patients    Patient[]
+
+  @@index([district])
+  @@index([type])
+  @@map("facilities")
+}
+
+model FacilityService {
+  id         String   @id @default(uuid())
+  facilityId String   @map("facility_id")
+  facility   Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  name       String   // e.g. "General Consultation", "Maternal Care", "Emergency Triage"
+  category   String?  // e.g. "OPD", "MCH", "EMERGENCY", "DIAGNOSTICS"
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@unique([facilityId, name])
+  @@index([name])
+  @@map("facility_services")
+}
+
+model FacilityBedStatus {
+  id                  String   @id @default(uuid())
+  facilityId          String   @unique @map("facility_id")
+  facility            Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  totalBeds           Int      @default(10) @map("total_beds")
+  availableBeds       Int      @default(5) @map("available_beds")
+  icuBedsTotal        Int      @default(0) @map("icu_beds_total")
+  icuBedsAvailable    Int      @default(0) @map("icu_beds_available")
+  oxygenBedsTotal     Int      @default(2) @map("oxygen_beds_total")
+  oxygenBedsAvailable Int      @default(1) @map("oxygen_beds_available")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@map("facility_bed_status")
+}
+
+model FacilityMedicine {
+  id             String    @id @default(uuid())
+  facilityId     String    @map("facility_id")
+  facility       Facility  @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  medicineName   String    @map("medicine_name") // e.g. "Paracetamol 500mg", "Amoxicillin"
+  category       String?   // e.g. "Analgesic", "Antibiotic", "Maternal Supplement"
+  quantity       Int       @default(100)
+  unit           String    @default("strips") // "tablets", "strips", "bottles", "vials"
+  stockThreshold Int       @default(20) @map("stock_threshold")
+  isAvailable    Boolean   @default(true) @map("is_available")
+  expiryDate     DateTime? @map("expiry_date") @db.Date
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@unique([facilityId, medicineName])
+  @@index([medicineName])
+  @@map("facility_medicines")
+}
+
+model FacilityDiagnostic {
+  id              String   @id @default(uuid())
+  facilityId      String   @map("facility_id")
+  facility        Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  testName        String   @map("test_name") // e.g. "Complete Blood Count (CBC)", "X-Ray Chest"
+  category        String?  // e.g. "Pathology", "Radiology", "Biochemistry"
+  isAvailable     Boolean  @default(true) @map("is_available")
+  turnaroundHours Int      @default(24) @map("turnaround_hours")
+  costInr         Int      @default(0) @map("cost_inr") // 0 == Free under Govt scheme
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@unique([facilityId, testName])
+  @@index([testName])
+  @@map("facility_diagnostics")
 }

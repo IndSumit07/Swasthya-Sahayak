@@ -2,18 +2,41 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { authApi, type UserProfile } from "@/lib/api";
 
 export default function Navbar() {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const navContainerRef = useRef<HTMLElement | null>(null);
+  const pathname = usePathname();
+
+  const isFacilitiesPage = pathname?.startsWith("/facilities");
 
   useEffect(() => {
     authApi.me()
       .then((res) => setUser(res.data))
       .catch(() => setUser(null));
   }, []);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (navContainerRef.current && !navContainerRef.current.contains(e.target as Node)) {
+        setActiveDropdown(null);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
+
+  // Close mobile menu on route changes
+  useEffect(() => {
+    setMobileMenuOpen(false);
+    setActiveDropdown(null);
+  }, [pathname]);
 
   const handleMouseEnter = (name: string) => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -27,14 +50,12 @@ export default function Navbar() {
     }, 150); // slight grace delay so mouse movement across borders doesn't flicker
   };
 
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
   return (
-    <header className="relative z-50 flex flex-col py-1">
+    <header ref={navContainerRef} className="relative z-50 flex flex-col py-1">
       <div className="flex items-center justify-between gap-4">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2.5 sm:gap-3 flex-shrink-0">
-          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-[#0E4A43] flex items-center justify-center text-[#E5F973] shadow-sm">
+        <Link href="/" className="flex items-center gap-2.5 sm:gap-3 flex-shrink-0 group">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-[#0E4A43] flex items-center justify-center text-[#E5F973] shadow-sm group-hover:scale-105 transition-transform">
             <svg className="w-5 h-5 sm:w-6 sm:h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
             </svg>
@@ -89,7 +110,8 @@ export default function Navbar() {
               >
                 <div className="bg-white rounded-2xl p-2.5 shadow-2xl border border-slate-100/80 ring-1 ring-black/5">
                   <Link
-                    href="#teleconsultation"
+                    href="/#services"
+                    onClick={() => setActiveDropdown(null)}
                     className="flex items-start gap-3 p-2.5 rounded-xl hover:bg-[#F4F6F8] transition-colors"
                   >
                     <div className="w-8 h-8 rounded-lg bg-emerald-50 text-[#0E4A43] flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -98,13 +120,14 @@ export default function Navbar() {
                       </svg>
                     </div>
                     <div>
-                      <div className="font-semibold text-xs text-slate-900">Assisted Teleconsultation</div>
-                      <div className="text-[11px] text-slate-500">Live doctor consult at sub-centres &amp; kiosks</div>
+                      <div className="font-semibold text-xs text-slate-900">Doctor Consultations</div>
+                      <div className="text-[11px] text-slate-500">General OPD and online specialist consults</div>
                     </div>
                   </Link>
 
                   <Link
-                    href="#triage"
+                    href="/#diagnostics"
+                    onClick={() => setActiveDropdown(null)}
                     className="flex items-start gap-3 p-2.5 rounded-xl hover:bg-[#F4F6F8] transition-colors"
                   >
                     <div className="w-8 h-8 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -113,13 +136,14 @@ export default function Navbar() {
                       </svg>
                     </div>
                     <div>
-                      <div className="font-semibold text-xs text-slate-900">Digital Triage</div>
-                      <div className="text-[11px] text-slate-500">Symptom evaluation &amp; priority assignment</div>
+                      <div className="font-semibold text-xs text-slate-900">Diagnostics &amp; Lab Tests</div>
+                      <div className="text-[11px] text-slate-500">Blood tests, sugar, X-Ray &amp; check-ups</div>
                     </div>
                   </Link>
 
                   <Link
-                    href="#referrals"
+                    href="/#care-flow"
+                    onClick={() => setActiveDropdown(null)}
                     className="flex items-start gap-3 p-2.5 rounded-xl hover:bg-[#F4F6F8] transition-colors"
                   >
                     <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -128,8 +152,8 @@ export default function Navbar() {
                       </svg>
                     </div>
                     <div>
-                      <div className="font-semibold text-xs text-slate-900">Referral Tracking</div>
-                      <div className="text-[11px] text-slate-500">Sub-Centre → PHC → District Hospital</div>
+                      <div className="font-semibold text-xs text-slate-900">How It Works</div>
+                      <div className="text-[11px] text-slate-500">4 easy steps to access care near you</div>
                     </div>
                   </Link>
                 </div>
@@ -147,7 +171,7 @@ export default function Navbar() {
               type="button"
               onClick={() => setActiveDropdown(activeDropdown === "facilities" ? null : "facilities")}
               className={`flex items-center gap-1 px-3.5 py-1.5 rounded-full transition-all ${
-                activeDropdown === "facilities"
+                activeDropdown === "facilities" || isFacilitiesPage
                   ? "bg-white text-slate-950 shadow-xs font-semibold"
                   : "hover:text-slate-950 hover:bg-slate-200/50"
               }`}
@@ -174,7 +198,8 @@ export default function Navbar() {
               >
                 <div className="bg-white rounded-2xl p-2.5 shadow-2xl border border-slate-100/80 ring-1 ring-black/5">
                   <Link
-                    href="#phc-network"
+                    href="/facilities"
+                    onClick={() => setActiveDropdown(null)}
                     className="flex items-start gap-3 p-2.5 rounded-xl hover:bg-[#F4F6F8] transition-colors"
                   >
                     <div className="w-8 h-8 rounded-lg bg-emerald-50 text-[#0E4A43] flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -183,13 +208,14 @@ export default function Navbar() {
                       </svg>
                     </div>
                     <div>
-                      <div className="font-semibold text-xs text-slate-900">PHC &amp; Sub-Centre Directory</div>
-                      <div className="text-[11px] text-slate-500">Locate nearest health centres &amp; OPD timings</div>
+                      <div className="font-semibold text-xs text-slate-900">Hospital &amp; PHC Directory</div>
+                      <div className="text-[11px] text-slate-500">Find nearest clinics, OPD hours &amp; contact info</div>
                     </div>
                   </Link>
 
                   <Link
-                    href="#medicines"
+                    href="/facilities"
+                    onClick={() => setActiveDropdown(null)}
                     className="flex items-start gap-3 p-2.5 rounded-xl hover:bg-[#F4F6F8] transition-colors"
                   >
                     <div className="w-8 h-8 rounded-lg bg-lime-50 text-lime-800 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -198,13 +224,14 @@ export default function Navbar() {
                       </svg>
                     </div>
                     <div>
-                      <div className="font-semibold text-xs text-slate-900">Medicine &amp; Stock Availability</div>
-                      <div className="text-[11px] text-slate-500">Live essential drug tracker across 36 districts</div>
+                      <div className="font-semibold text-xs text-slate-900">Live Medicine Availability</div>
+                      <div className="text-[11px] text-slate-500">Check essential medicine stock in real time</div>
                     </div>
                   </Link>
 
                   <Link
-                    href="#beds"
+                    href="/facilities"
+                    onClick={() => setActiveDropdown(null)}
                     className="flex items-start gap-3 p-2.5 rounded-xl hover:bg-[#F4F6F8] transition-colors"
                   >
                     <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -213,8 +240,8 @@ export default function Navbar() {
                       </svg>
                     </div>
                     <div>
-                      <div className="font-semibold text-xs text-slate-900">Emergency Beds &amp; Oxygen</div>
-                      <div className="text-[11px] text-slate-500">CHC &amp; District Hospital occupancy status</div>
+                      <div className="font-semibold text-xs text-slate-900">Hospital Beds &amp; ICU Status</div>
+                      <div className="text-[11px] text-slate-500">View available general, oxygen and ICU beds</div>
                     </div>
                   </Link>
                 </div>
@@ -260,6 +287,7 @@ export default function Navbar() {
                 <div className="bg-white rounded-2xl p-2.5 shadow-2xl border border-slate-100/80 ring-1 ring-black/5 space-y-1">
                   <Link
                     href="/login"
+                    onClick={() => setActiveDropdown(null)}
                     className="flex items-center justify-between p-2.5 rounded-xl hover:bg-[#F4F6F8] transition-colors"
                   >
                     <div>
@@ -271,6 +299,7 @@ export default function Navbar() {
 
                   <Link
                     href="/login"
+                    onClick={() => setActiveDropdown(null)}
                     className="flex items-center justify-between p-2.5 rounded-xl hover:bg-[#F4F6F8] transition-colors"
                   >
                     <div>
@@ -282,6 +311,7 @@ export default function Navbar() {
 
                   <Link
                     href="/login"
+                    onClick={() => setActiveDropdown(null)}
                     className="flex items-center justify-between p-2.5 rounded-xl hover:bg-[#F4F6F8] transition-colors"
                   >
                     <div>
@@ -293,6 +323,7 @@ export default function Navbar() {
 
                   <Link
                     href="/login"
+                    onClick={() => setActiveDropdown(null)}
                     className="flex items-center justify-between p-2.5 rounded-xl hover:bg-[#F4F6F8] transition-colors"
                   >
                     <div>
@@ -306,12 +337,16 @@ export default function Navbar() {
             )}
           </div>
 
-          {/* Direct Tab: News & Updates with Highlight Pill */}
+          {/* Direct Tab: Facilities / Live Updates with Highlight Pill */}
           <Link
-            href="/register"
-            className="px-3.5 py-1.5 rounded-full bg-[#E5F973] text-slate-950 font-bold shadow-xs transition-transform hover:scale-105"
+            href="/facilities"
+            className={`px-3.5 py-1.5 rounded-full font-bold shadow-xs transition-transform hover:scale-105 ${
+              isFacilitiesPage
+                ? "bg-[#0E4A43] text-white"
+                : "bg-[#E5F973] text-slate-950"
+            }`}
           >
-            Live Updates
+            Live Facilities
           </Link>
         </nav>
 
@@ -389,44 +424,44 @@ export default function Navbar() {
         <div className="lg:hidden mt-3 p-4 bg-white rounded-3xl border border-slate-200 shadow-xl space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
           <div className="grid grid-cols-2 gap-2 text-xs">
             <Link
-              href="/login"
+              href="/#services"
               onClick={() => setMobileMenuOpen(false)}
-              className="p-3 bg-[#EFF2F5] rounded-2xl font-bold text-slate-900 flex flex-col justify-between"
+              className="p-3 bg-[#EFF2F5] hover:bg-slate-200/60 rounded-2xl font-bold text-slate-900 flex flex-col justify-between transition-colors"
             >
-              <span>Assisted Tele-OPD</span>
-              <span className="text-[10px] text-slate-500 mt-1">Live Doctor Consult</span>
+              <span>Doctor Consults</span>
+              <span className="text-[10px] text-slate-500 mt-1">General OPD &amp; Telehealth</span>
             </Link>
             <Link
-              href="/login"
+              href="/facilities"
               onClick={() => setMobileMenuOpen(false)}
-              className="p-3 bg-[#EFF2F5] rounded-2xl font-bold text-slate-900 flex flex-col justify-between"
+              className="p-3 bg-[#0E4A43]/10 hover:bg-[#0E4A43]/15 border border-[#0E4A43]/20 rounded-2xl font-bold text-[#0E4A43] flex flex-col justify-between transition-colors"
             >
-              <span>Digital Triage</span>
-              <span className="text-[10px] text-slate-500 mt-1">Symptom Check</span>
+              <span>Facilities &amp; Beds</span>
+              <span className="text-[10px] text-emerald-800/80 mt-1">Find PHCs &amp; Live Beds</span>
             </Link>
             <Link
-              href="/login"
+              href="/#diagnostics"
               onClick={() => setMobileMenuOpen(false)}
-              className="p-3 bg-[#EFF2F5] rounded-2xl font-bold text-slate-900 flex flex-col justify-between"
+              className="p-3 bg-[#EFF2F5] hover:bg-slate-200/60 rounded-2xl font-bold text-slate-900 flex flex-col justify-between transition-colors"
             >
-              <span>Medicine Stock</span>
-              <span className="text-[10px] text-slate-500 mt-1">PHC Pharmacy</span>
+              <span>Lab Tests</span>
+              <span className="text-[10px] text-slate-500 mt-1">Blood Tests &amp; Scans</span>
             </Link>
             <Link
-              href="/login"
+              href="/#care-flow"
               onClick={() => setMobileMenuOpen(false)}
-              className="p-3 bg-[#EFF2F5] rounded-2xl font-bold text-slate-900 flex flex-col justify-between"
+              className="p-3 bg-[#EFF2F5] hover:bg-slate-200/60 rounded-2xl font-bold text-slate-900 flex flex-col justify-between transition-colors"
             >
-              <span>Referral Tracker</span>
-              <span className="text-[10px] text-slate-500 mt-1">Hospital Transfer</span>
+              <span>How It Works</span>
+              <span className="text-[10px] text-slate-500 mt-1">4 Simple Steps</span>
             </Link>
           </div>
 
           <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
             <span className="font-bold text-slate-700">24x7 Emergency Triage:</span>
-            <span className="font-extrabold text-[#0E4A43] bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+            <a href="tel:104" className="font-extrabold text-[#0E4A43] bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 hover:bg-emerald-100">
               Dial 104 / 108
-            </span>
+            </a>
           </div>
         </div>
       )}
