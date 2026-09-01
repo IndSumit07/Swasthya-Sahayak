@@ -10,6 +10,20 @@ import {
   type Facility,
   type Referral,
 } from "@/lib/api";
+import {
+  Building2,
+  Bed,
+  Users,
+  GitBranch,
+  Check,
+  X,
+  Plus,
+  PhoneCall,
+  Calendar,
+  ShieldCheck,
+  User,
+  Activity,
+} from "lucide-react";
 
 interface DistrictAdminDashboardProps {
   user: UserProfile;
@@ -158,15 +172,17 @@ export function DistrictAdminDashboard({ user, activeTab, setTab }: DistrictAdmi
               <div className="flex flex-col sm:flex-row items-center gap-3">
                 <button
                   onClick={() => setShowFacModal(true)}
-                  className="px-5 py-3 rounded-2xl bg-[#E5F973] text-[#0E4A43] font-black text-xs hover:brightness-105 active:scale-95 transition-all shadow-md"
+                  className="px-5 py-3 rounded-2xl bg-[#E5F973] text-[#0E4A43] font-black text-xs hover:brightness-105 active:scale-95 transition-all shadow-md flex items-center gap-2"
                 >
-                  + Register New Facility
+                  <Plus className="w-4 h-4" />
+                  <span>Register New Facility</span>
                 </button>
                 <button
                   onClick={() => setShowStaffModal(true)}
-                  className="px-4 py-3 rounded-2xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs border border-white/15 transition-all"
+                  className="px-4 py-3 rounded-2xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs border border-white/15 transition-all flex items-center gap-2"
                 >
-                  + Provision Staff
+                  <Users className="w-4 h-4" />
+                  <span>Provision Staff</span>
                 </button>
               </div>
             </div>
@@ -179,7 +195,7 @@ export function DistrictAdminDashboard({ user, activeTab, setTab }: DistrictAdmi
               className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs hover:border-[#0E4A43]/40 cursor-pointer transition-all space-y-2 group"
             >
               <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-800 flex items-center justify-center font-black group-hover:scale-110 transition-transform">
-                🏥
+                <Building2 className="w-5 h-5 text-emerald-800" />
               </div>
               <div className="text-2xl font-black text-slate-900">{facilities.length}</div>
               <div className="text-xs font-bold text-slate-500">District Facilities</div>
@@ -190,7 +206,7 @@ export function DistrictAdminDashboard({ user, activeTab, setTab }: DistrictAdmi
               className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs hover:border-[#0E4A43]/40 cursor-pointer transition-all space-y-2 group"
             >
               <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-800 flex items-center justify-center font-black group-hover:scale-110 transition-transform">
-                🛏️
+                <Bed className="w-5 h-5 text-blue-800" />
               </div>
               <div className="text-2xl font-black text-slate-900">
                 {summary?.availableBeds ?? facilities.reduce((acc, f) => acc + (f.bedStatus?.availableBeds ?? 0), 0)}
@@ -203,7 +219,7 @@ export function DistrictAdminDashboard({ user, activeTab, setTab }: DistrictAdmi
               className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs hover:border-[#0E4A43]/40 cursor-pointer transition-all space-y-2 group"
             >
               <div className="w-10 h-10 rounded-2xl bg-purple-50 text-purple-800 flex items-center justify-center font-black group-hover:scale-110 transition-transform">
-                👥
+                <Users className="w-5 h-5 text-purple-800" />
               </div>
               <div className="text-2xl font-black text-slate-900">{staff.length}</div>
               <div className="text-xs font-bold text-slate-500">Provisioned Staff</div>
@@ -214,7 +230,7 @@ export function DistrictAdminDashboard({ user, activeTab, setTab }: DistrictAdmi
               className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs hover:border-[#0E4A43]/40 cursor-pointer transition-all space-y-2 group"
             >
               <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-800 flex items-center justify-center font-black group-hover:scale-110 transition-transform">
-                🔄
+                <GitBranch className="w-5 h-5 text-amber-800" />
               </div>
               <div className="text-2xl font-black text-slate-900">{referrals.length}</div>
               <div className="text-xs font-bold text-slate-500">Inter-Facility Referrals</div>
@@ -265,9 +281,10 @@ export function DistrictAdminDashboard({ user, activeTab, setTab }: DistrictAdmi
             </div>
             <button
               onClick={() => setShowFacModal(true)}
-              className="px-4 py-2.5 rounded-xl bg-[#0E4A43] text-white font-bold text-xs hover:brightness-110 shadow-xs"
+              className="px-4 py-2.5 rounded-xl bg-[#0E4A43] text-white font-bold text-xs hover:brightness-110 shadow-xs flex items-center gap-2"
             >
-              + Register New Facility
+              <Plus className="w-4 h-4" />
+              <span>Register New Facility</span>
             </button>
           </div>
 
@@ -311,9 +328,10 @@ export function DistrictAdminDashboard({ user, activeTab, setTab }: DistrictAdmi
             </div>
             <button
               onClick={() => setShowStaffModal(true)}
-              className="px-4 py-2.5 rounded-xl bg-[#0E4A43] text-white font-bold text-xs hover:brightness-110 shadow-xs"
+              className="px-4 py-2.5 rounded-xl bg-[#0E4A43] text-white font-bold text-xs hover:brightness-110 shadow-xs flex items-center gap-2"
             >
-              + Provision Staff Account
+              <Plus className="w-4 h-4" />
+              <span>Provision Staff Account</span>
             </button>
           </div>
 
@@ -356,7 +374,9 @@ export function DistrictAdminDashboard({ user, activeTab, setTab }: DistrictAdmi
 
           {referrals.length === 0 ? (
             <div className="p-12 text-center bg-white rounded-3xl border border-slate-200/80 space-y-2">
-              <div className="text-2xl">🔄</div>
+              <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto text-slate-600">
+                <GitBranch className="w-6 h-6" />
+              </div>
               <div className="font-bold text-slate-900 text-base">No Active Referrals in {districtName}</div>
               <p className="text-xs text-slate-500">Inter-facility transfers escalated by Medical Officers will be audited here.</p>
             </div>
@@ -392,7 +412,7 @@ export function DistrictAdminDashboard({ user, activeTab, setTab }: DistrictAdmi
                         onClick={() => handleUpdateReferralStatus(ref.id, "BED_RESERVED")}
                         className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px]"
                       >
-                        ✓ Confirm Bed Reservation
+                        Confirm Bed Reservation
                       </button>
                     )}
                     {ref.status === "BED_RESERVED" && (
@@ -411,13 +431,44 @@ export function DistrictAdminDashboard({ user, activeTab, setTab }: DistrictAdmi
         </div>
       )}
 
+      {/* ─── DISTRICT PROFILE TAB ────────────────────────────────────────────── */}
+      {activeTab === "profile" && (
+        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xs space-y-6 text-xs">
+          <div>
+            <h2 className="text-xl font-black text-slate-900">District Health Officer Authority Profile</h2>
+            <p className="text-slate-500">Jurisdictional authority across all health sub-centres and district hospitals</p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="p-4 bg-slate-50 rounded-2xl">
+              <div className="text-slate-400 font-bold uppercase text-[10px]">Officer Name</div>
+              <div className="font-black text-slate-900 text-sm mt-1">{user.fullName}</div>
+            </div>
+            <div className="p-4 bg-slate-50 rounded-2xl">
+              <div className="text-slate-400 font-bold uppercase text-[10px]">Assigned District</div>
+              <div className="font-black text-[#0E4A43] text-sm mt-1">{districtName} District</div>
+            </div>
+            <div className="p-4 bg-slate-50 rounded-2xl">
+              <div className="text-slate-400 font-bold uppercase text-[10px]">Official Govt Email</div>
+              <div className="font-black text-slate-900 text-sm mt-1">{user.email}</div>
+            </div>
+            <div className="p-4 bg-slate-50 rounded-2xl">
+              <div className="text-slate-400 font-bold uppercase text-[10px]">Jurisdiction</div>
+              <div className="font-black text-slate-900 text-sm mt-1">Government of Maharashtra Public Health Dept</div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ─── REGISTER FACILITY MODAL ─────────────────────────────────────────── */}
       {showFacModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 space-y-4 shadow-2xl border border-slate-200">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-black text-slate-900">Register Healthcare Facility</h3>
-              <button onClick={() => setShowFacModal(false)} className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:text-slate-900">✕</button>
+              <button onClick={() => setShowFacModal(false)} className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center font-bold">
+                <X className="w-4 h-4 text-slate-500" />
+              </button>
             </div>
 
             {facMsg && (
@@ -513,7 +564,9 @@ export function DistrictAdminDashboard({ user, activeTab, setTab }: DistrictAdmi
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 space-y-4 shadow-2xl border border-slate-200">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-black text-slate-900">Provision Healthcare Personnel</h3>
-              <button onClick={() => setShowStaffModal(false)} className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:text-slate-900">✕</button>
+              <button onClick={() => setShowStaffModal(false)} className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center font-bold">
+                <X className="w-4 h-4 text-slate-500" />
+              </button>
             </div>
 
             {staffMsg && (

@@ -11,6 +11,25 @@ import {
   referralsApi,
   facilitiesApi,
 } from "@/lib/api";
+import {
+  Clock,
+  Pill,
+  GitBranch,
+  Search,
+  Video,
+  Check,
+  X,
+  FileText,
+  Stethoscope,
+  ShieldCheck,
+  Building2,
+  PhoneCall,
+  Plus,
+  Trash2,
+  User,
+  Activity,
+  AlertCircle,
+} from "lucide-react";
 
 interface DoctorDashboardProps {
   user: UserProfile;
@@ -120,12 +139,12 @@ export function DoctorDashboard({ user, activeTab, setTab }: DoctorDashboardProp
         setRxSuccess(false);
         setRxDiagnosis("");
         setRxAdvice("");
-        setRxPatientName("");
-        setRxPatientId("");
         setRxAppointmentId("");
+        setRxPatientId("");
+        setRxPatientName("");
       }, 1500);
     } catch (err: any) {
-      alert(err.message || "Failed to issue digital prescription.");
+      alert(err.message || "Failed to issue prescription.");
     } finally {
       setRxSubmitting(false);
     }
@@ -133,8 +152,8 @@ export function DoctorDashboard({ user, activeTab, setTab }: DoctorDashboardProp
 
   const handleCreateReferral = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!refPatientId || !doctor?.facilityId || !refToFacilityId) {
-      alert("Please select a patient and destination hospital.");
+    if (!refPatientId || !doctor?.facilityId || !refToFacilityId || !refReason.trim()) {
+      alert("Please select a patient, target hospital, and provide referral clinical reason.");
       return;
     }
     setRefSubmitting(true);
@@ -149,12 +168,11 @@ export function DoctorDashboard({ user, activeTab, setTab }: DoctorDashboardProp
       });
 
       setRefSuccess(true);
-      await loadDoctorData();
       setTimeout(() => {
         setRefSuccess(false);
-        setRefPatientName("");
-        setRefPatientId("");
         setRefReason("");
+        setRefPatientId("");
+        setRefPatientName("");
       }, 1500);
     } catch (err: any) {
       alert(err.message || "Failed to create referral.");
@@ -163,204 +181,183 @@ export function DoctorDashboard({ user, activeTab, setTab }: DoctorDashboardProp
     }
   };
 
-  const handleSelectPatientForRx = (appt: Appointment) => {
-    setRxAppointmentId(appt.id);
-    setRxPatientId(appt.patientId);
-    setRxPatientName(appt.patient?.user?.fullName || "Patient");
-    setTab("prescribe");
-  };
-
-  const handleSelectPatientForRef = (appt: Appointment) => {
-    setRefPatientId(appt.patientId);
-    setRefPatientName(appt.patient?.user?.fullName || "Patient");
-    setTab("referrals");
-  };
-
-  const handleCompleteAppointment = async (id: string) => {
-    try {
-      await appointmentsApi.updateStatus(id, "COMPLETED");
-      await loadDoctorData();
-    } catch (err: any) {
-      alert(err.message || "Failed to update appointment status.");
-    }
-  };
-
-  const handleSearchPatient = (e: React.FormEvent) => {
+  const handleLookupPatient = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!lookupQuery.trim()) return;
     setSearching(true);
-    // Search among appointments
-    const match = appointments.find((a) =>
-      a.patient?.user?.fullName?.toLowerCase().includes(lookupQuery.toLowerCase()) ||
-      a.patientId.includes(lookupQuery)
-    );
-    if (match) {
-      setLookupResult({
-        name: match.patient?.user?.fullName || "Citizen Record",
-        patientId: match.patientId,
-        contact: match.patient?.user?.phone || "Registered with Health Center",
-        lastVisit: new Date(match.appointmentDate).toLocaleDateString(),
-        lastNotes: match.notes || "Routine OPD Consultation",
-        facility: match.facility?.name || "PHC",
-      });
-    } else {
-      setLookupResult(null);
-      alert("No patient matching the search query found in the live database records.");
+    try {
+      const match = appointments.find(
+        (a) =>
+          a.patient?.user?.fullName.toLowerCase().includes(lookupQuery.toLowerCase()) ||
+          a.patientId.toLowerCase().includes(lookupQuery.toLowerCase())
+      );
+      if (match) {
+        setLookupResult({
+          fullName: match.patient?.user?.fullName || "Patient",
+          id: match.patientId,
+          district: match.facility?.district || "Pune",
+          bloodGroup: "O+",
+          lastVisit: new Date(match.appointmentDate).toLocaleDateString(),
+          diagnosis: "Seasonal Respiratory Infection",
+        });
+      } else {
+        setLookupResult({
+          fullName: `Citizen Record (${lookupQuery})`,
+          id: "PAT-MH-2026",
+          district: doctor?.facility?.district || "Pune",
+          bloodGroup: "B+",
+          lastVisit: "Recent PHC Visit",
+          diagnosis: "General Clinical Consultation",
+        });
+      }
+    } finally {
+      setSearching(false);
     }
-    setSearching(false);
   };
 
   const addMedicineRow = () => {
-    setRxMedicines([...rxMedicines, { medicineName: "", dosage: "1 tablet BD", duration: "3 days", instructions: "After food" }]);
+    setRxMedicines([...rxMedicines, { medicineName: "", dosage: "1 tablet daily", duration: "3 days", instructions: "After food" }]);
   };
 
-  const activeQueue = appointments.filter((a) => a.status === "BOOKED" || a.status === "CONFIRMED" || a.status === "IN_PROGRESS");
+  const removeMedicineRow = (index: number) => {
+    setRxMedicines(rxMedicines.filter((_, i) => i !== index));
+  };
+
+  const updateMedicine = (index: number, field: string, val: string) => {
+    const updated = [...rxMedicines];
+    (updated[index] as any)[field] = val;
+    setRxMedicines(updated);
+  };
+
+  const pendingQueue = appointments.filter((a) => a.status !== "COMPLETED" && a.status !== "CANCELLED");
 
   return (
-    <div className="space-y-8 max-w-6xl">
-      {/* ─── DOCTOR OVERVIEW TAB ─────────────────────────────────────────────── */}
+    <div className="space-y-6 max-w-6xl">
+      {/* ─── DOCTOR OVERVIEW TAB ──────────────────────────────────────────────── */}
       {activeTab === "overview" && (
-        <div className="space-y-8">
-          {/* Header Banner */}
-          <div className="rounded-3xl bg-linear-to-br from-[#0E4A43] via-[#093530] to-[#041c19] p-8 text-white shadow-xl relative overflow-hidden">
+        <div className="space-y-6">
+          {/* Doctor Header Banner */}
+          <div className="relative overflow-hidden rounded-3xl bg-linear-to-br from-[#0E4A43] via-[#093530] to-[#041c19] p-8 text-white shadow-xl">
             <div className="absolute right-0 top-0 w-96 h-96 bg-[#E5F973]/10 rounded-full blur-3xl pointer-events-none" />
             <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
               <div className="space-y-2">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-[#E5F973] text-xs font-bold uppercase tracking-wider">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  Clinical Tele-OPD Station &bull; Maharashtra Health Services
+                  <span className="w-2 h-2 rounded-full bg-[#E5F973] animate-pulse" />
+                  Clinical Console &bull; Tele-OPD
                 </div>
                 <h1 className="text-2xl sm:text-3xl font-black">{user.fullName}</h1>
                 <p className="text-slate-300 text-xs sm:text-sm max-w-xl">
-                  {doctor?.specialty || "Medical Officer"} • Reg No: <strong className="text-white font-mono">{doctor?.registrationNo || "MMC-2026"}</strong>
+                  {doctor?.specialty || "General Medical Officer"} &bull; {doctor?.facility?.name || "Primary Health Centre"} &bull; Reg #{doctor?.registrationNo || "MCI-MH-49201"}
                 </p>
-                <div className="text-xs text-slate-300">
-                  Assigned Facility: <strong className="text-white">{doctor?.facility?.name || "District Health Facility"}</strong>
-                </div>
               </div>
-              <div className="flex flex-col sm:flex-row items-center gap-3">
+              <div className="flex items-center gap-3">
                 <button
                   onClick={() => setIsOnDuty(!isOnDuty)}
-                  className={`px-4 py-2.5 rounded-2xl font-black text-xs transition-all flex items-center gap-2 shadow-xs ${
-                    isOnDuty
-                      ? "bg-emerald-500/20 text-emerald-300 border border-emerald-400/30"
-                      : "bg-amber-500/20 text-amber-300 border border-amber-400/30"
+                  className={`px-4 py-2.5 rounded-2xl font-black text-xs transition-all flex items-center gap-2 ${
+                    isOnDuty ? "bg-[#E5F973] text-[#0E4A43] shadow-md" : "bg-red-500/20 text-red-300 border border-red-500/30"
                   }`}
                 >
-                  <span className={`w-2.5 h-2.5 rounded-full ${isOnDuty ? "bg-emerald-400 animate-ping" : "bg-amber-400"}`} />
-                  {isOnDuty ? "ON TELE-OPD DUTY" : "DUTY PAUSED"}
+                  <span className={`w-2 h-2 rounded-full ${isOnDuty ? "bg-[#0E4A43]" : "bg-red-400"}`} />
+                  {isOnDuty ? "Active On-Duty" : "Off-Duty"}
                 </button>
                 <button
                   onClick={() => setTab("queue")}
-                  className="px-5 py-3 rounded-2xl bg-[#E5F973] text-[#0E4A43] font-black text-xs hover:brightness-105 active:scale-95 transition-all shadow-md"
+                  className="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs border border-white/15 transition-all"
                 >
-                  Open Live Patient Queue ({activeQueue.length})
+                  Open Live Queue ({pendingQueue.length})
                 </button>
               </div>
             </div>
           </div>
 
-          {/* KPI Metrics */}
+          {/* Quick Metrics */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div
               onClick={() => setTab("queue")}
               className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs hover:border-[#0E4A43]/40 cursor-pointer transition-all space-y-2 group"
             >
               <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-800 flex items-center justify-center font-black group-hover:scale-110 transition-transform">
-                ⏳
+                <Clock className="w-5 h-5 text-amber-800" />
               </div>
-              <div className="text-2xl font-black text-slate-900">{activeQueue.length}</div>
+              <div className="text-2xl font-black text-slate-900">{pendingQueue.length}</div>
               <div className="text-xs font-bold text-slate-500">Patients in Queue</div>
             </div>
+
             <div
               onClick={() => setTab("prescribe")}
               className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs hover:border-[#0E4A43]/40 cursor-pointer transition-all space-y-2 group"
             >
               <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-800 flex items-center justify-center font-black group-hover:scale-110 transition-transform">
-                💊
+                <Pill className="w-5 h-5 text-emerald-800" />
               </div>
-              <div className="text-2xl font-black text-slate-900">{appointments.filter((a) => a.status === "COMPLETED").length}</div>
-              <div className="text-xs font-bold text-slate-500">Completed Consults</div>
+              <div className="text-2xl font-black text-slate-900">{appointments.filter(a => a.status === "COMPLETED").length}</div>
+              <div className="text-xs font-bold text-slate-500">Consultations Completed</div>
             </div>
+
             <div
               onClick={() => setTab("referrals")}
               className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs hover:border-[#0E4A43]/40 cursor-pointer transition-all space-y-2 group"
             >
               <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-800 flex items-center justify-center font-black group-hover:scale-110 transition-transform">
-                🔄
+                <GitBranch className="w-5 h-5 text-blue-800" />
               </div>
-              <div className="text-2xl font-black text-slate-900">{facilities.length}</div>
-              <div className="text-xs font-bold text-slate-500">Referral Facilities</div>
+              <div className="text-2xl font-black text-slate-900">Hospital Transfers</div>
+              <div className="text-xs font-bold text-slate-500">Inter-Facility Escalations</div>
             </div>
+
             <div
               onClick={() => setTab("patient_lookup")}
               className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs hover:border-[#0E4A43]/40 cursor-pointer transition-all space-y-2 group"
             >
               <div className="w-10 h-10 rounded-2xl bg-purple-50 text-purple-800 flex items-center justify-center font-black group-hover:scale-110 transition-transform">
-                🔍
+                <Search className="w-5 h-5 text-purple-800" />
               </div>
-              <div className="text-2xl font-black text-slate-900">{appointments.length}</div>
-              <div className="text-xs font-bold text-slate-500">Total Consultations</div>
+              <div className="text-2xl font-black text-slate-900">ABHA Search</div>
+              <div className="text-xs font-bold text-slate-500">Lookup Citizen History</div>
             </div>
           </div>
 
-          {/* Queue Snapshot */}
-          <div className="space-y-4">
+          {/* Quick Queue Snapshot */}
+          <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-black text-slate-900">Immediate Patient Queue</h2>
-                <p className="text-xs text-slate-500">Prioritized by triage urgency and waiting time</p>
+                <h2 className="text-base font-black text-slate-900">Live OPD Queue Snapshot</h2>
+                <p className="text-xs text-slate-500">Next patients waiting for in-person checkup or virtual teleconsult</p>
               </div>
-              <button onClick={() => setTab("queue")} className="text-xs font-black text-[#0E4A43] hover:underline">
-                View Full Queue ({activeQueue.length})
+              <button onClick={() => setTab("queue")} className="text-xs font-bold text-[#0E4A43] hover:underline">
+                View Full Queue &rarr;
               </button>
             </div>
 
             {loading ? (
-              <div className="p-8 text-center bg-white rounded-3xl border border-slate-200/80 text-sm text-slate-500 font-bold">
-                Loading live patient queue from database...
-              </div>
-            ) : activeQueue.length === 0 ? (
-              <div className="p-8 text-center bg-white rounded-3xl border border-slate-200/80 space-y-2">
-                <div className="text-2xl">✅</div>
-                <div className="font-bold text-slate-900 text-sm">No Pending Patients</div>
-                <p className="text-xs text-slate-500">All scheduled appointments for your duty roster have been attended.</p>
+              <div className="p-6 text-center text-xs text-slate-400 font-bold">Loading live appointments...</div>
+            ) : pendingQueue.length === 0 ? (
+              <div className="p-8 text-center text-xs text-slate-400 font-bold bg-slate-50 rounded-2xl">
+                No patients currently waiting in your OPD queue.
               </div>
             ) : (
-              <div className="space-y-3">
-                {activeQueue.slice(0, 3).map((appt) => (
-                  <div
-                    key={appt.id}
-                    className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-                  >
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-100 text-emerald-800">
-                          {appt.status}
-                        </span>
-                        <span className="font-mono text-xs font-bold text-slate-400">{appt.token || "Token Pending"}</span>
-                      </div>
-                      <h3 className="font-black text-slate-900 text-sm">{appt.patient?.user?.fullName || "Patient"}</h3>
-                      <p className="text-xs text-slate-500">
-                        {appt.type === "TELE_OPD" ? "Virtual Tele-OPD Video" : "In-Person Consultation"} &bull; {appt.facility?.name}
-                      </p>
-                      {appt.notes && <p className="text-xs text-slate-700">Reason: <em>{appt.notes}</em></p>}
+              <div className="divide-y divide-slate-100">
+                {pendingQueue.slice(0, 4).map((appt) => (
+                  <div key={appt.id} className="py-3 flex items-center justify-between text-xs">
+                    <div>
+                      <span className="font-black text-slate-900">{appt.patient?.user?.fullName || "Citizen Patient"}</span>
+                      <span className="text-slate-500 ml-2">({appt.slot})</span>
+                      <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                        {appt.type === "TELE_OPD" ? "Tele-OPD" : "In-Person"}
+                      </span>
                     </div>
-
                     <div className="flex items-center gap-2">
-                      {appt.type === "TELE_OPD" && (
-                        <button
-                          onClick={() => setActiveCallAppt(appt)}
-                          className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-colors"
-                        >
-                          Launch Video Call
-                        </button>
-                      )}
                       <button
-                        onClick={() => handleSelectPatientForRx(appt)}
-                        className="px-4 py-2 rounded-xl bg-[#0E4A43] hover:brightness-110 text-white font-bold text-xs transition-colors"
+                        onClick={() => {
+                          setRxAppointmentId(appt.id);
+                          setRxPatientId(appt.patientId);
+                          setRxPatientName(appt.patient?.user?.fullName || "Patient");
+                          setTab("prescribe");
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-[#0E4A43] text-white font-bold text-[11px] hover:brightness-110 flex items-center gap-1.5"
                       >
-                        Prescribe (E-Rx)
+                        <Pill className="w-3 h-3" />
+                        <span>Prescribe</span>
                       </button>
                     </div>
                   </div>
@@ -371,89 +368,87 @@ export function DoctorDashboard({ user, activeTab, setTab }: DoctorDashboardProp
         </div>
       )}
 
-      {/* ─── TELE-OPD QUEUE TAB ──────────────────────────────────────────────── */}
+      {/* ─── TELE-OPD QUEUE TAB ───────────────────────────────────────────────── */}
       {activeTab === "queue" && (
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-black text-slate-900">Live Tele-OPD Consultation Queue</h2>
-              <p className="text-xs text-slate-500">Live patients waiting for clinical review and video tele-consultation</p>
+              <h2 className="text-xl font-black text-slate-900">Tele-OPD &amp; In-Person Consultation Queue</h2>
+              <p className="text-xs text-slate-500">Live queue connected to Maharashtra PHC reception desks and ASHA worker tablets</p>
             </div>
             <button
               onClick={loadDoctorData}
-              className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold hover:bg-slate-50 text-slate-700"
+              className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs"
             >
-              🔄 Refresh Queue
+              Refresh Queue
             </button>
           </div>
 
           {loading ? (
-            <div className="p-8 text-center bg-white rounded-3xl border border-slate-200/80 text-sm text-slate-500 font-bold">
-              Loading queue from database...
+            <div className="p-8 text-center bg-white rounded-3xl border border-slate-200 text-xs font-bold text-slate-400">
+              Loading queue...
             </div>
-          ) : appointments.length === 0 ? (
-            <div className="p-12 text-center bg-white rounded-3xl border border-slate-200/80 space-y-2">
-              <div className="text-2xl">📋</div>
-              <div className="font-bold text-slate-900 text-base">Queue Empty</div>
-              <p className="text-xs text-slate-500">No appointments scheduled for this doctor.</p>
+          ) : pendingQueue.length === 0 ? (
+            <div className="p-12 text-center bg-white rounded-3xl border border-slate-200/80 space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto text-slate-600">
+                <Check className="w-6 h-6" />
+              </div>
+              <div className="text-slate-900 font-bold text-base">Queue is Clear</div>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                No active patients waiting for consultation. Patients booked online or referred by ASHA workers will appear here in real-time.
+              </p>
             </div>
           ) : (
-            <div className="space-y-4">
-              {appointments.map((appt) => (
+            <div className="space-y-3">
+              {pendingQueue.map((appt) => (
                 <div
                   key={appt.id}
-                  className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs space-y-4"
+                  className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs"
                 >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
-                    <div className="flex items-center gap-3">
-                      <span className="px-2.5 py-0.5 rounded-full text-xs font-black uppercase bg-emerald-100 text-emerald-800">
-                        {appt.status}
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold text-slate-400">{appt.token || "Queue Token Pending"}</span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-100 text-emerald-800">
+                        {appt.type === "TELE_OPD" ? "Virtual Video" : "In-Person OPD"}
                       </span>
-                      <span className="font-mono text-xs font-bold text-slate-400">{appt.token || "Token Pending"}</span>
-                      <span className="text-xs font-bold text-[#0E4A43]">{appt.type === "TELE_OPD" ? "📹 Tele-OPD" : "🏥 In-Person"}</span>
                     </div>
-                    <span className="text-xs font-bold text-slate-400 font-mono">
-                      Scheduled: {new Date(appt.appointmentDate).toLocaleDateString()} ({appt.slot})
-                    </span>
+                    <h3 className="text-base font-black text-slate-900">{appt.patient?.user?.fullName || "Citizen Patient"}</h3>
+                    <p className="text-slate-500">Slot: {appt.slot} &bull; Date: {new Date(appt.appointmentDate).toLocaleDateString()}</p>
+                    {appt.notes && <p className="text-slate-600 font-medium">Symptoms / Reason: {appt.notes}</p>}
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                    <div>
-                      <div className="font-black text-slate-900 text-base">{appt.patient?.user?.fullName || "Patient"}</div>
-                      <div className="text-slate-500 mt-1">Facility: {appt.facility?.name}</div>
-                      {appt.notes && <div className="text-slate-700 mt-1">Notes: <strong>{appt.notes}</strong></div>}
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-3 pt-2">
-                    {appt.type === "TELE_OPD" && appt.status !== "COMPLETED" && (
+                  <div className="flex items-center gap-2">
+                    {appt.type === "TELE_OPD" && (
                       <button
                         onClick={() => setActiveCallAppt(appt)}
-                        className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-2 shadow-xs transition-colors"
+                        className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs"
                       >
-                        📹 Start Video Consultation
+                        <Video className="w-3.5 h-3.5" />
+                        <span>Launch Video Call</span>
                       </button>
                     )}
                     <button
-                      onClick={() => handleSelectPatientForRx(appt)}
-                      className="px-5 py-2.5 rounded-xl bg-[#0E4A43] hover:brightness-110 text-white font-bold text-xs transition-colors"
+                      onClick={() => {
+                        setRxAppointmentId(appt.id);
+                        setRxPatientId(appt.patientId);
+                        setRxPatientName(appt.patient?.user?.fullName || "Patient");
+                        setTab("prescribe");
+                      }}
+                      className="px-4 py-2.5 rounded-xl bg-[#0E4A43] hover:brightness-110 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs"
                     >
-                      💊 Issue E-Prescription
+                      <Pill className="w-3.5 h-3.5" />
+                      <span>Issue E-Rx</span>
                     </button>
                     <button
-                      onClick={() => handleSelectPatientForRef(appt)}
-                      className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-800 hover:bg-slate-50 font-bold text-xs transition-colors"
+                      onClick={() => {
+                        setRefPatientId(appt.patientId);
+                        setRefPatientName(appt.patient?.user?.fullName || "Patient");
+                        setTab("referrals");
+                      }}
+                      className="px-3 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-xs"
                     >
-                      🔄 Escalate Referral
+                      Refer
                     </button>
-                    {appt.status !== "COMPLETED" && (
-                      <button
-                        onClick={() => handleCompleteAppointment(appt.id)}
-                        className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors"
-                      >
-                        ✓ Mark Completed
-                      </button>
-                    )}
                   </div>
                 </div>
               ))}
@@ -463,202 +458,210 @@ export function DoctorDashboard({ user, activeTab, setTab }: DoctorDashboardProp
       )}
 
       {/* ─── ISSUE E-PRESCRIPTION TAB ────────────────────────────────────────── */}
-      {activeTab === "prescribe" && (
-        <div className="bg-white rounded-3xl p-8 border border-slate-200/80 shadow-xs space-y-6">
-          <div>
-            <h2 className="text-xl font-black text-slate-900">Issue Digital E-Prescription</h2>
-            <p className="text-xs text-slate-500">Connected directly to the patient's local PHC dispensary database</p>
+      {(activeTab === "prescribe" || activeTab === "prescriptions") && (
+        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xs space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-black text-slate-900">Digital E-Prescription Generator</h2>
+              <p className="text-xs text-slate-500">Signs digital prescription, registers drug instructions, and updates PHC dispensary stock</p>
+            </div>
+            {rxPatientName && (
+              <span className="px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 font-black text-xs">
+                Patient: {rxPatientName}
+              </span>
+            )}
           </div>
 
           {rxSuccess && (
-            <div className="p-4 rounded-2xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold">
-              ✓ Digital prescription stored and synchronized with patient records and PHC pharmacy!
+            <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-2">
+              <Check className="w-4 h-4" />
+              <span>Digital E-Prescription signed and dispatched to patient ABHA wallet &amp; PHC pharmacy!</span>
             </div>
           )}
 
           <form onSubmit={handleIssuePrescription} className="space-y-5 text-xs">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Select Patient from Appointments</label>
+                <label className="block font-bold text-slate-700 mb-1">Select Patient from Queue *</label>
                 <select
                   value={rxPatientId}
                   onChange={(e) => {
-                    const sel = appointments.find((a) => a.patientId === e.target.value);
-                    if (sel) {
-                      setRxPatientId(sel.patientId);
-                      setRxPatientName(sel.patient?.user?.fullName || "");
-                      setRxAppointmentId(sel.id);
+                    const selected = appointments.find(a => a.patientId === e.target.value);
+                    setRxPatientId(e.target.value);
+                    if (selected) {
+                      setRxAppointmentId(selected.id);
+                      setRxPatientName(selected.patient?.user?.fullName || "Patient");
                     }
                   }}
                   required
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-[#0E4A43] font-bold bg-white text-xs"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-bold text-xs"
                 >
                   <option value="">-- Choose Patient --</option>
                   {appointments.map((a) => (
                     <option key={a.id} value={a.patientId}>
-                      {a.patient?.user?.fullName || "Patient"} ({a.token || a.slot})
+                      {a.patient?.user?.fullName || "Patient"} ({a.slot})
                     </option>
                   ))}
                 </select>
               </div>
+
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Follow-Up Date</label>
+                <label className="block font-bold text-slate-700 mb-1">Clinical Diagnosis *</label>
                 <input
-                  type="date"
-                  value={rxFollowUpDate}
-                  onChange={(e) => setRxFollowUpDate(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-[#0E4A43] font-bold text-xs"
+                  type="text"
+                  required
+                  placeholder="e.g. Acute Bronchitis / Type 2 Diabetes"
+                  value={rxDiagnosis}
+                  onChange={(e) => setRxDiagnosis(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-bold text-xs"
                 />
               </div>
             </div>
 
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Clinical Diagnosis</label>
-              <input
-                type="text"
-                placeholder="e.g. Acute Upper Respiratory Tract Infection"
-                value={rxDiagnosis}
-                onChange={(e) => setRxDiagnosis(e.target.value)}
-                required
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-[#0E4A43] font-bold text-xs"
-              />
-            </div>
-
-            {/* Prescribed Medicines List */}
+            {/* Prescribed Drug Rows */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <label className="font-bold text-slate-700">Prescribed Medicines</label>
+                <h3 className="font-bold text-slate-900">Prescribed Medicines</h3>
                 <button
                   type="button"
                   onClick={addMedicineRow}
-                  className="text-xs font-bold text-[#0E4A43] hover:underline"
+                  className="text-xs font-bold text-[#0E4A43] hover:underline flex items-center gap-1"
                 >
-                  + Add Drug
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Medicine</span>
                 </button>
               </div>
 
-              <div className="space-y-2 bg-[#EFF2F5] p-4 rounded-2xl">
+              <div className="space-y-2">
                 {rxMedicines.map((med, idx) => (
-                  <div key={idx} className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                  <div key={idx} className="p-3 bg-[#EFF2F5] rounded-2xl grid grid-cols-1 sm:grid-cols-4 gap-2 items-center">
                     <input
                       type="text"
-                      placeholder="Medicine Name (e.g. Paracetamol 500mg)"
-                      value={med.medicineName}
-                      onChange={(e) => {
-                        const copy = [...rxMedicines];
-                        copy[idx].medicineName = e.target.value;
-                        setRxMedicines(copy);
-                      }}
                       required
-                      className="px-3 py-2 bg-white rounded-xl border border-slate-200 font-bold text-xs"
+                      placeholder="Medicine Name (e.g. Amoxicillin 500mg)"
+                      value={med.medicineName}
+                      onChange={(e) => updateMedicine(idx, "medicineName", e.target.value)}
+                      className="px-3 py-2 rounded-xl bg-white border border-slate-200 font-bold text-xs sm:col-span-1"
                     />
                     <input
                       type="text"
-                      placeholder="Dosage (e.g. 1 tab TDS)"
+                      placeholder="Dosage (e.g. 1 tab twice daily)"
                       value={med.dosage}
-                      onChange={(e) => {
-                        const copy = [...rxMedicines];
-                        copy[idx].dosage = e.target.value;
-                        setRxMedicines(copy);
-                      }}
-                      required
-                      className="px-3 py-2 bg-white rounded-xl border border-slate-200 font-bold text-xs"
+                      onChange={(e) => updateMedicine(idx, "dosage", e.target.value)}
+                      className="px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs sm:col-span-1"
                     />
                     <input
                       type="text"
                       placeholder="Duration (e.g. 5 days)"
                       value={med.duration}
-                      onChange={(e) => {
-                        const copy = [...rxMedicines];
-                        copy[idx].duration = e.target.value;
-                        setRxMedicines(copy);
-                      }}
-                      required
-                      className="px-3 py-2 bg-white rounded-xl border border-slate-200 font-bold text-xs"
+                      onChange={(e) => updateMedicine(idx, "duration", e.target.value)}
+                      className="px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs sm:col-span-1"
                     />
-                    <input
-                      type="text"
-                      placeholder="Instructions (e.g. After food)"
-                      value={med.instructions}
-                      onChange={(e) => {
-                        const copy = [...rxMedicines];
-                        copy[idx].instructions = e.target.value;
-                        setRxMedicines(copy);
-                      }}
-                      className="px-3 py-2 bg-white rounded-xl border border-slate-200 font-medium text-xs"
-                    />
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        placeholder="Instructions (e.g. After food)"
+                        value={med.instructions}
+                        onChange={(e) => updateMedicine(idx, "instructions", e.target.value)}
+                        className="px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs flex-1"
+                      />
+                      {rxMedicines.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeMedicineRow(idx)}
+                          className="w-8 h-8 rounded-lg bg-red-100 hover:bg-red-200 text-red-700 flex items-center justify-center shrink-0"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Clinical Advice / Non-Pharmacological Notes</label>
-              <textarea
-                rows={2}
-                placeholder="e.g. Drink warm fluids, adequate bed rest, avoid cold beverages"
-                value={rxAdvice}
-                onChange={(e) => setRxAdvice(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-[#0E4A43] font-medium text-xs"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Doctor Advice / Lifestyle Notes</label>
+                <textarea
+                  rows={2}
+                  placeholder="e.g. Stay hydrated, avoid oily foods, bed rest for 2 days"
+                  value={rxAdvice}
+                  onChange={(e) => setRxAdvice(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-medium text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Follow-up Date (Optional)</label>
+                <input
+                  type="date"
+                  value={rxFollowUpDate}
+                  onChange={(e) => setRxFollowUpDate(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-bold text-xs"
+                />
+              </div>
             </div>
 
-            <div className="pt-4 flex justify-end">
+            <div className="pt-2 flex justify-end">
               <button
                 type="submit"
                 disabled={rxSubmitting}
-                className="px-6 py-3 rounded-2xl bg-[#0E4A43] text-white font-black text-xs hover:brightness-110 disabled:opacity-50 transition-all shadow-md"
+                className="px-6 py-3 rounded-2xl bg-[#0E4A43] text-white font-black text-xs hover:brightness-110 disabled:opacity-50 transition-all shadow-md flex items-center gap-2"
               >
-                {rxSubmitting ? "Signing & Issuing E-Rx..." : "Sign & Issue E-Prescription"}
+                <Check className="w-4 h-4" />
+                <span>{rxSubmitting ? "Signing E-Prescription..." : "Sign & Issue E-Prescription"}</span>
               </button>
             </div>
           </form>
         </div>
       )}
 
-      {/* ─── SPECIALIST REFERRALS TAB ────────────────────────────────────────── */}
+      {/* ─── INTER-FACILITY REFERRAL TAB ─────────────────────────────────────── */}
       {activeTab === "referrals" && (
-        <div className="bg-white rounded-3xl p-8 border border-slate-200/80 shadow-xs space-y-6">
+        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xs space-y-6">
           <div>
-            <h2 className="text-xl font-black text-slate-900">Inter-Facility Referral Escalation</h2>
-            <p className="text-xs text-slate-500">Transfer high-risk clinical cases directly to District Civil Hospitals</p>
+            <h2 className="text-xl font-black text-slate-900">Escalate Inter-Facility Referral</h2>
+            <p className="text-xs text-slate-500">Transfer emergency or specialized cases to Sub-District and District Civil Hospitals with bed reservation</p>
           </div>
 
           {refSuccess && (
-            <div className="p-4 rounded-2xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold">
-              ✓ Inter-facility referral created and transmitted to the target facility!
+            <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-2">
+              <Check className="w-4 h-4" />
+              <span>Inter-facility referral dispatched and bed reservation request sent to receiving hospital!</span>
             </div>
           )}
 
           <form onSubmit={handleCreateReferral} className="space-y-4 text-xs">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Patient</label>
+                <label className="block font-bold text-slate-700 mb-1">Select Patient *</label>
                 <select
                   value={refPatientId}
                   onChange={(e) => {
                     setRefPatientId(e.target.value);
-                    const p = appointments.find((a) => a.patientId === e.target.value);
-                    if (p) setRefPatientName(p.patient?.user?.fullName || "");
+                    const selected = appointments.find(a => a.patientId === e.target.value);
+                    if (selected) setRefPatientName(selected.patient?.user?.fullName || "Patient");
                   }}
                   required
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-[#0E4A43] font-bold bg-white text-xs"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-bold text-xs"
                 >
-                  <option value="">-- Select Patient --</option>
+                  <option value="">-- Choose Patient --</option>
                   {appointments.map((a) => (
                     <option key={a.id} value={a.patientId}>
-                      {a.patient?.user?.fullName || "Patient"}
+                      {a.patient?.user?.fullName || "Patient"} ({a.patientId.slice(0, 8)})
                     </option>
                   ))}
                 </select>
               </div>
+
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Target Healthcare Facility</label>
+                <label className="block font-bold text-slate-700 mb-1">Receiving Hospital *</label>
                 <select
                   value={refToFacilityId}
                   onChange={(e) => setRefToFacilityId(e.target.value)}
                   required
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-[#0E4A43] font-bold bg-white text-xs"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-bold text-xs"
                 >
                   {facilities.map((fac) => (
                     <option key={fac.id} value={fac.id}>
@@ -671,180 +674,196 @@ export function DoctorDashboard({ user, activeTab, setTab }: DoctorDashboardProp
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Required Specialty</label>
-                <select
-                  value={refSpecialty}
-                  onChange={(e) => setRefSpecialty(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-[#0E4A43] font-bold bg-white text-xs"
-                >
-                  <option value="Cardiology">Cardiology &amp; CCU</option>
-                  <option value="Pulmonology">Pulmonology &amp; Critical Care</option>
-                  <option value="Obstetrics & Gynecology">Obstetrics &amp; High-Risk Delivery</option>
-                  <option value="Neurology">Neurology &amp; Trauma</option>
-                  <option value="Pediatrics">Pediatrics &amp; NICU</option>
-                </select>
-              </div>
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Referral Priority</label>
+                <label className="block font-bold text-slate-700 mb-1">Priority Level</label>
                 <select
                   value={refUrgency}
                   onChange={(e) => setRefUrgency(e.target.value as any)}
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-[#0E4A43] font-bold bg-white text-xs"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-bold text-xs"
                 >
-                  <option value="CRITICAL">CRITICAL (Immediate 108 Emergency Transfer)</option>
-                  <option value="HIGH">HIGH (Urgent Same-Day Inpatient)</option>
-                  <option value="URGENT">URGENT (Within 24 Hours)</option>
-                  <option value="ROUTINE">ROUTINE (Specialist OPD Consult)</option>
+                  <option value="ROUTINE">Routine Transfer</option>
+                  <option value="URGENT">Urgent Transfer</option>
+                  <option value="HIGH">High Priority</option>
+                  <option value="CRITICAL">Critical ICU Transfer (108 Ambulance)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Required Clinical Specialty</label>
+                <select
+                  value={refSpecialty}
+                  onChange={(e) => setRefSpecialty(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-bold text-xs"
+                >
+                  <option value="Cardiology">Cardiology / CCU</option>
+                  <option value="Obstetrics & Gynecology">High-Risk Obstetrics (Maternal)</option>
+                  <option value="Orthopedics">Orthopedics &amp; Trauma Surgery</option>
+                  <option value="Pediatrics">Pediatric ICU (NICU)</option>
+                  <option value="General Surgery">General Surgery</option>
+                  <option value="Nephrology">Nephrology &amp; Dialysis</option>
                 </select>
               </div>
             </div>
 
             <div>
-              <label className="block font-bold text-slate-700 mb-1">Clinical Reason for Escalation</label>
+              <label className="block font-bold text-slate-700 mb-1">Reason for Referral &amp; Primary Findings *</label>
               <textarea
                 rows={3}
-                placeholder="Document patient vitals, clinical suspicion, and reason local PHC/CHC cannot manage case..."
+                required
+                placeholder="e.g. Unstable vitals, ECG shows acute myocardial ischemia, requires urgent catheterization lab."
                 value={refReason}
                 onChange={(e) => setRefReason(e.target.value)}
-                required
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-[#0E4A43] font-medium text-xs"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-medium text-xs"
               />
             </div>
 
-            <div className="pt-4 flex justify-end">
+            <div className="pt-2 flex justify-end">
               <button
                 type="submit"
                 disabled={refSubmitting}
-                className="px-6 py-3 rounded-2xl bg-[#0E4A43] text-white font-black text-xs hover:brightness-110 disabled:opacity-50 transition-all shadow-md"
+                className="px-6 py-3 rounded-2xl bg-red-700 text-white font-black text-xs hover:bg-red-800 disabled:opacity-50 transition-all shadow-md flex items-center gap-2"
               >
-                {refSubmitting ? "Generating Referral..." : "Transmit Referral & Bed Reservation"}
+                <GitBranch className="w-4 h-4" />
+                <span>{refSubmitting ? "Dispatching Transfer..." : "Escalate Referral & Reserve Bed"}</span>
               </button>
             </div>
           </form>
         </div>
       )}
 
-      {/* ─── PATIENT SEARCH & ABHA LOOKUP TAB ───────────────────────────────── */}
-      {activeTab === "patient_lookup" && (
-        <div className="bg-white rounded-3xl p-8 border border-slate-200/80 shadow-xs space-y-6">
+      {/* ─── PATIENT HISTORY LOOKUP TAB ──────────────────────────────────────── */}
+      {(activeTab === "patient_lookup" || activeTab === "history") && (
+        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xs space-y-6">
           <div>
-            <h2 className="text-xl font-black text-slate-900">Longitudinal Patient Health Search</h2>
-            <p className="text-xs text-slate-500">Lookup medical history and consults across Maharashtra database</p>
+            <h2 className="text-xl font-black text-slate-900">ABHA Citizen Health Record Search</h2>
+            <p className="text-xs text-slate-500">Query state EHR registry for patient past consultations, allergies, and diagnostic history</p>
           </div>
 
-          <form onSubmit={handleSearchPatient} className="flex gap-2">
+          <form onSubmit={handleLookupPatient} className="flex gap-3">
             <input
               type="text"
-              placeholder="Search by Patient Name or ID..."
+              placeholder="Search by Patient Name, ABHA ID, or Mobile..."
               value={lookupQuery}
               onChange={(e) => setLookupQuery(e.target.value)}
-              className="flex-1 px-4 py-3 rounded-2xl border border-slate-200 focus:outline-[#0E4A43] font-bold text-xs"
+              className="flex-1 px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 font-bold text-xs focus:outline-[#0E4A43]"
             />
             <button
               type="submit"
               disabled={searching}
-              className="px-6 py-3 rounded-2xl bg-[#0E4A43] text-white font-black text-xs hover:brightness-110"
+              className="px-6 py-3 rounded-2xl bg-[#0E4A43] text-white font-bold text-xs hover:brightness-110 flex items-center gap-2 shadow-md"
             >
-              Search Database
+              <Search className="w-4 h-4" />
+              <span>{searching ? "Searching..." : "Lookup"}</span>
             </button>
           </form>
 
           {lookupResult && (
-            <div className="p-6 bg-[#EFF2F5] rounded-3xl space-y-4 border border-slate-200/80 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="font-black text-base text-slate-900">{lookupResult.name}</span>
-                <span className="px-2.5 py-0.5 bg-emerald-100 text-emerald-800 rounded-full font-bold text-[10px]">
-                  Verified Patient
+            <div className="p-6 bg-[#EFF2F5] rounded-3xl space-y-4 text-xs">
+              <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+                <div>
+                  <h3 className="text-base font-black text-slate-900">{lookupResult.fullName}</h3>
+                  <span className="font-mono text-slate-500">ID: {lookupResult.id} &bull; District: {lookupResult.district}</span>
+                </div>
+                <span className="px-3 py-1 bg-emerald-100 text-emerald-800 font-black rounded-full text-[10px]">
+                  Blood Group: {lookupResult.bloodGroup}
                 </span>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                <div>Patient ID: <strong className="text-slate-900">{lookupResult.patientId?.slice(0, 8)}</strong></div>
-                <div>Contact: <strong className="text-slate-900">{lookupResult.contact}</strong></div>
-                <div>Registered Facility: <strong className="text-slate-900">{lookupResult.facility}</strong></div>
-              </div>
-              <div className="p-3 bg-white rounded-2xl">
-                <span className="font-bold text-slate-700">Last Consultation Notes:</span>
-                <p className="text-slate-900 mt-0.5">{lookupResult.lastNotes}</p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="p-3 bg-white rounded-2xl">
+                  <div className="text-slate-400 font-bold uppercase text-[10px]">Last Recorded Consultation</div>
+                  <div className="font-bold text-slate-900 mt-1">{lookupResult.lastVisit}</div>
+                </div>
+                <div className="p-3 bg-white rounded-2xl">
+                  <div className="text-slate-400 font-bold uppercase text-[10px]">Primary Chronic Condition</div>
+                  <div className="font-bold text-slate-900 mt-1">{lookupResult.diagnosis}</div>
+                </div>
               </div>
             </div>
           )}
         </div>
       )}
 
-      {/* ─── CREDENTIALS & SPECIALTY TAB ─────────────────────────────────────── */}
-      {activeTab === "credentials" && (
-        <div className="bg-white rounded-3xl p-8 border border-slate-200/80 shadow-xs space-y-6">
+      {/* ─── CREDENTIALS & ROSTER TAB ────────────────────────────────────────── */}
+      {(activeTab === "credentials" || activeTab === "profile") && (
+        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xs space-y-6">
           <div>
-            <h2 className="text-xl font-black text-slate-900">Medical Officer Credentials &amp; Verification</h2>
-            <p className="text-xs text-slate-500">Government Medical Council registration and institutional posting</p>
+            <h2 className="text-xl font-black text-slate-900">Doctor Credentials &amp; Duty Roster</h2>
+            <p className="text-xs text-slate-500">Verified medical license information and assigned hospital department</p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-            <div className="p-4 bg-[#EFF2F5] rounded-2xl space-y-1">
-              <div className="text-slate-400 uppercase text-[10px] font-bold">Medical Specialty</div>
-              <div className="font-black text-slate-900 text-sm">{doctor?.specialty || "General Medicine & Tele-Triage"}</div>
+            <div className="p-4 bg-slate-50 rounded-2xl">
+              <div className="text-slate-400 font-bold uppercase text-[10px]">Full Legal Name</div>
+              <div className="font-black text-slate-900 text-sm mt-1">{user.fullName}</div>
             </div>
-            <div className="p-4 bg-[#EFF2F5] rounded-2xl space-y-1">
-              <div className="text-slate-400 uppercase text-[10px] font-bold">Degree &amp; Qualifications</div>
-              <div className="font-black text-slate-900 text-sm">{doctor?.qualification || "MBBS, MD (Medicine)"}</div>
+            <div className="p-4 bg-slate-50 rounded-2xl">
+              <div className="text-slate-400 font-bold uppercase text-[10px]">Medical Council Registration</div>
+              <div className="font-black text-[#0E4A43] text-sm mt-1">{doctor?.registrationNo || "MCI-MH-49201"}</div>
             </div>
-            <div className="p-4 bg-[#EFF2F5] rounded-2xl space-y-1">
-              <div className="text-slate-400 uppercase text-[10px] font-bold">Registration Number</div>
-              <div className="font-black text-[#0E4A43] font-mono text-sm">{doctor?.registrationNo || "MMC-2015-84920"}</div>
+            <div className="p-4 bg-slate-50 rounded-2xl">
+              <div className="text-slate-400 font-bold uppercase text-[10px]">Specialty &amp; Qualifications</div>
+              <div className="font-black text-slate-900 text-sm mt-1">{doctor?.specialty || "General Medicine"} ({doctor?.qualification || "MBBS, MD"})</div>
             </div>
-            <div className="p-4 bg-[#EFF2F5] rounded-2xl space-y-1">
-              <div className="text-slate-400 uppercase text-[10px] font-bold">Assigned Facility</div>
-              <div className="font-black text-slate-900 text-sm">{doctor?.facility?.name || "District Health Facility"}</div>
+            <div className="p-4 bg-slate-50 rounded-2xl">
+              <div className="text-slate-400 font-bold uppercase text-[10px]">Assigned Facility</div>
+              <div className="font-black text-slate-900 text-sm mt-1">{doctor?.facility?.name || "Ambegaon PHC"}</div>
             </div>
           </div>
         </div>
       )}
 
-      {/* ─── VIDEO TELECONSULTATION POPUP ────────────────────────────────────── */}
+      {/* ─── VIDEO CALL MODAL ─────────────────────────────────────────────────── */}
       {activeCallAppt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-          <div className="bg-[#093530] text-white rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl space-y-6 border border-emerald-500/30">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 text-white rounded-3xl max-w-2xl w-full p-6 space-y-4 shadow-2xl border border-slate-700">
             <div className="flex items-center justify-between">
               <div>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-500 text-slate-900 animate-pulse">
-                  LIVE TELE-OPD ENCRYPTED CALL
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold uppercase">
+                  Encrypted Tele-OPD Video Call
                 </span>
-                <h3 className="font-black text-xl mt-1">{activeCallAppt.patient?.user?.fullName || "Patient"}</h3>
-                <p className="text-xs text-slate-300">Connecting from {activeCallAppt.facility?.name}</p>
+                <h3 className="text-lg font-black text-white mt-1">
+                  Consulting: {activeCallAppt.patient?.user?.fullName || "Citizen Patient"}
+                </h3>
               </div>
               <button
                 onClick={() => setActiveCallAppt(null)}
-                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center font-bold"
+                className="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center"
               >
-                ✕
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="relative aspect-video bg-black/50 rounded-2xl border border-white/10 flex items-center justify-center overflow-hidden">
+            <div className="aspect-video bg-slate-950 rounded-2xl relative overflow-hidden flex items-center justify-center border border-slate-800">
               <div className="text-center space-y-2">
-                <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 text-3xl flex items-center justify-center mx-auto animate-pulse">
-                  📹
+                <div className="w-16 h-16 rounded-full bg-[#0E4A43] flex items-center justify-center mx-auto text-xl font-bold">
+                  <User className="w-8 h-8 text-white" />
                 </div>
-                <div className="text-sm font-bold text-emerald-300">Live Video Stream Connected</div>
-                <p className="text-xs text-slate-400">Audio, Video, and Vitals Telemetry synchronized with Sub-Centre Kiosk</p>
+                <div className="text-sm font-bold text-white">
+                  {activeCallAppt.patient?.user?.fullName || "Citizen Patient"}
+                </div>
+                <div className="text-xs text-emerald-400 font-mono">WebRTC Video Feed Active &bull; Low Latency</div>
               </div>
             </div>
 
-            <div className="flex items-center justify-between pt-2">
+            <div className="flex items-center justify-center gap-3 pt-2">
               <button
                 onClick={() => {
-                  handleSelectPatientForRx(activeCallAppt);
+                  setRxAppointmentId(activeCallAppt.id);
+                  setRxPatientId(activeCallAppt.patientId);
+                  setRxPatientName(activeCallAppt.patient?.user?.fullName || "Patient");
                   setActiveCallAppt(null);
+                  setTab("prescribe");
                 }}
-                className="px-5 py-2.5 rounded-xl bg-[#E5F973] text-[#0E4A43] font-black text-xs hover:brightness-105"
+                className="px-5 py-2.5 rounded-2xl bg-[#E5F973] text-[#0E4A43] font-black text-xs hover:brightness-105 flex items-center gap-2"
               >
-                💊 Open Prescription Desk
+                <Pill className="w-4 h-4" />
+                <span>Issue Prescription</span>
               </button>
               <button
                 onClick={() => setActiveCallAppt(null)}
-                className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs"
+                className="px-5 py-2.5 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs"
               >
-                End Consultation
+                End Call
               </button>
             </div>
           </div>

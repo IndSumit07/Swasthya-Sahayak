@@ -3,6 +3,20 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { adminApi, facilitiesApi, type UserProfile, type Facility } from "@/lib/api";
+import {
+  LayoutDashboard,
+  Building2,
+  Users,
+  Activity,
+  User,
+  Plus,
+  Check,
+  X,
+  ShieldCheck,
+  Bed,
+  Server,
+  Clock,
+} from "lucide-react";
 
 const MAHARASHTRA_DISTRICTS = [
   "ALL",
@@ -104,17 +118,17 @@ export function SuperAdminDashboard({ user, activeTab, setTab }: SuperAdminDashb
   const dhoList = staff.filter((s) => s.role === "DISTRICT_ADMIN");
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-6xl">
       {/* ─── STATE COMMAND OVERVIEW ───────────────────────────────────────────── */}
       {activeTab === "overview" && (
         <div className="space-y-6">
           {/* Header Banner */}
-          <div className="bg-[#0E4A43] text-white rounded-[32px] p-6 sm:p-8 relative overflow-hidden shadow-xs">
+          <div className="bg-[#0E4A43] text-white rounded-3xl p-6 sm:p-8 relative overflow-hidden shadow-xl">
             <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
               <div className="space-y-2 max-w-xl">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#E5F973]/20 border border-[#E5F973]/30 text-[#E5F973] text-xs font-bold">
                   <span className="w-2 h-2 rounded-full bg-[#E5F973] animate-pulse" />
-                  State Super Administrator Console • Government of Maharashtra
+                  State Super Administrator Console &bull; Government of Maharashtra
                 </div>
                 <h2 className="text-2xl sm:text-3xl font-black font-heading">
                   Statewide Health Infrastructure
@@ -126,21 +140,23 @@ export function SuperAdminDashboard({ user, activeTab, setTab }: SuperAdminDashb
                 <div className="pt-2 flex flex-wrap gap-2.5">
                   <button
                     onClick={() => setShowDhoModal(true)}
-                    className="px-5 py-2.5 rounded-full bg-[#E5F973] text-slate-950 text-xs font-black hover:bg-[#d8ec68] transition-all shadow-xs flex items-center gap-1.5 active:scale-95"
+                    className="px-5 py-2.5 rounded-2xl bg-[#E5F973] text-[#0E4A43] text-xs font-black hover:brightness-105 transition-all shadow-md flex items-center gap-2 active:scale-95"
                   >
-                    + Provision District Admin (DHO)
+                    <Plus className="w-4 h-4" />
+                    <span>Provision District Admin (DHO)</span>
                   </button>
                   <button
                     onClick={() => setShowFacModal(true)}
-                    className="px-5 py-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all border border-white/20"
+                    className="px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all border border-white/20 flex items-center gap-2"
                   >
-                    + Register Healthcare Facility
+                    <Building2 className="w-4 h-4" />
+                    <span>Register Healthcare Facility</span>
                   </button>
                 </div>
               </div>
 
               {/* State Macro Card */}
-              <div className="bg-white/10 backdrop-blur-md rounded-2xl p-5 border border-white/15 w-full lg:w-72 space-y-2 flex-shrink-0 text-xs">
+              <div className="bg-white/10 backdrop-blur-md rounded-2xl p-5 border border-white/15 w-full lg:w-72 space-y-2 shrink-0 text-xs">
                 <span className="text-[10px] font-bold uppercase text-emerald-200 block">Maharashtra State Health KPI</span>
                 <div className="flex justify-between py-1 border-b border-white/10">
                   <span className="text-emerald-100">Covered Districts:</span>
@@ -160,42 +176,42 @@ export function SuperAdminDashboard({ user, activeTab, setTab }: SuperAdminDashb
 
           {/* Quick Metrics */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <button onClick={() => setTab("facilities")} className="bg-[#EFF2F5] hover:bg-slate-200/70 p-5 rounded-[24px] border border-slate-200/50 text-left transition-all group">
+            <button onClick={() => setTab("facilities")} className="bg-[#EFF2F5] hover:bg-slate-200/70 p-5 rounded-3xl border border-slate-200/50 text-left transition-all group space-y-1">
               <div className="text-2xl font-black text-slate-900">{facilities.length}</div>
-              <div className="text-xs font-bold text-slate-700 mt-1">Hospitals &amp; PHCs</div>
+              <div className="text-xs font-bold text-slate-700">Hospitals &amp; PHCs</div>
               <div className="text-[10px] text-slate-500">Registered across districts</div>
             </button>
 
-            <button onClick={() => setTab("dho_management")} className="bg-[#EFF2F5] hover:bg-slate-200/70 p-5 rounded-[24px] border border-slate-200/50 text-left transition-all group">
+            <button onClick={() => setTab("dho_management")} className="bg-[#EFF2F5] hover:bg-slate-200/70 p-5 rounded-3xl border border-slate-200/50 text-left transition-all group space-y-1">
               <div className="text-2xl font-black text-indigo-700">{dhoList.length} DHOs</div>
-              <div className="text-xs font-bold text-slate-700 mt-1">District Health Officers</div>
+              <div className="text-xs font-bold text-slate-700">District Health Officers</div>
               <div className="text-[10px] text-slate-500">Assigned district heads</div>
             </button>
 
-            <button onClick={() => setTab("facilities")} className="bg-[#EFF2F5] hover:bg-slate-200/70 p-5 rounded-[24px] border border-slate-200/50 text-left transition-all group">
+            <button onClick={() => setTab("facilities")} className="bg-[#EFF2F5] hover:bg-slate-200/70 p-5 rounded-3xl border border-slate-200/50 text-left transition-all group space-y-1">
               <div className="text-2xl font-black text-emerald-700">
                 {facilities.reduce((acc, f) => acc + (f.bedStatus?.availableBeds ?? 0), 0)} / {facilities.reduce((acc, f) => acc + (f.bedStatus?.totalBeds ?? 0), 0)}
               </div>
-              <div className="text-xs font-bold text-slate-700 mt-1">Live Inpatient Beds</div>
+              <div className="text-xs font-bold text-slate-700">Live Inpatient Beds</div>
               <div className="text-[10px] text-slate-500">Vacant / State Capacity</div>
             </button>
 
-            <button onClick={() => setTab("system_health")} className="bg-[#EFF2F5] hover:bg-slate-200/70 p-5 rounded-[24px] border border-slate-200/50 text-left transition-all group">
+            <button onClick={() => setTab("system_health")} className="bg-[#EFF2F5] hover:bg-slate-200/70 p-5 rounded-3xl border border-slate-200/50 text-left transition-all group space-y-1">
               <div className="text-2xl font-black text-[#0E4A43]">{staff.length}</div>
-              <div className="text-xs font-bold text-slate-700 mt-1">Provisioned Personnel</div>
+              <div className="text-xs font-bold text-slate-700">Provisioned Personnel</div>
               <div className="text-[10px] text-slate-500">Doctors, ASHA, Admins</div>
             </button>
           </div>
 
           {/* Quick DHO Overview */}
-          <div className="bg-white rounded-[28px] p-6 border border-slate-200/80 shadow-xs space-y-4">
+          <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs space-y-4">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-base font-black text-slate-900">District Health Officers (DHO Hierarchy)</h3>
                 <p className="text-xs text-slate-500">Supervisory jurisdiction over district healthcare units.</p>
               </div>
               <button onClick={() => setTab("dho_management")} className="text-xs text-[#0E4A43] font-bold hover:underline">
-                Manage All Admins &rsaquo;
+                Manage All Admins &rarr;
               </button>
             </div>
 
@@ -242,14 +258,15 @@ export function SuperAdminDashboard({ user, activeTab, setTab }: SuperAdminDashb
               </select>
               <button
                 onClick={() => setShowFacModal(true)}
-                className="px-4 py-2.5 rounded-2xl bg-[#0E4A43] text-white text-xs font-bold hover:bg-[#083530]"
+                className="px-4 py-2.5 rounded-2xl bg-[#0E4A43] text-white text-xs font-bold hover:brightness-110 flex items-center gap-1.5 shadow-xs"
               >
-                + Add Facility
+                <Plus className="w-4 h-4" />
+                <span>Add Facility</span>
               </button>
             </div>
           </div>
 
-          <div className="bg-white rounded-[28px] border border-slate-200/80 shadow-xs overflow-hidden text-xs">
+          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden text-xs">
             <div className="overflow-x-auto">
               <table className="w-full text-left">
                 <thead className="bg-[#EFF2F5] text-slate-700 uppercase text-[10px] font-bold border-b border-slate-200">
@@ -276,7 +293,7 @@ export function SuperAdminDashboard({ user, activeTab, setTab }: SuperAdminDashb
                       </td>
                       <td className="py-3 px-4 text-right">
                         <Link href={`/facilities/${fac.id}`} className="text-[#0E4A43] font-bold hover:underline">
-                          View Live &rsaquo;
+                          View Live &rarr;
                         </Link>
                       </td>
                     </tr>
@@ -298,13 +315,14 @@ export function SuperAdminDashboard({ user, activeTab, setTab }: SuperAdminDashb
             </div>
             <button
               onClick={() => setShowDhoModal(true)}
-              className="px-5 py-2.5 rounded-full bg-[#0E4A43] text-white text-xs font-black hover:bg-[#083530] transition-all shadow-xs flex items-center gap-1.5"
+              className="px-5 py-2.5 rounded-2xl bg-[#0E4A43] text-white text-xs font-black hover:brightness-110 transition-all shadow-xs flex items-center gap-1.5"
             >
-              + Provision District Admin (DHO)
+              <Plus className="w-4 h-4" />
+              <span>Provision District Admin (DHO)</span>
             </button>
           </div>
 
-          <div className="bg-white rounded-[28px] border border-slate-200/80 shadow-xs overflow-hidden text-xs">
+          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden text-xs">
             <div className="overflow-x-auto">
               <table className="w-full text-left">
                 <thead className="bg-[#EFF2F5] text-slate-700 uppercase text-[10px] font-bold border-b border-slate-200">
@@ -353,17 +371,17 @@ export function SuperAdminDashboard({ user, activeTab, setTab }: SuperAdminDashb
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-white rounded-[28px] p-6 border border-slate-200/80 shadow-xs space-y-2">
+            <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs space-y-2">
               <span className="text-[10px] font-bold uppercase text-emerald-800">ABDM Registry Sync</span>
               <div className="text-2xl font-black text-slate-900">100% Operational</div>
               <p className="text-xs text-slate-500">M1, M2 &amp; M3 milestones compliant.</p>
             </div>
-            <div className="bg-white rounded-[28px] p-6 border border-slate-200/80 shadow-xs space-y-2">
+            <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs space-y-2">
               <span className="text-[10px] font-bold uppercase text-emerald-800">Database Replication</span>
               <div className="text-2xl font-black text-emerald-700">Healthy (0 ms lag)</div>
               <p className="text-xs text-slate-500">PostgreSQL on Supabase Cloud.</p>
             </div>
-            <div className="bg-white rounded-[28px] p-6 border border-slate-200/80 shadow-xs space-y-2">
+            <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs space-y-2">
               <span className="text-[10px] font-bold uppercase text-emerald-800">Emergency Dispatch</span>
               <div className="text-2xl font-black text-[#0E4A43]">24x7 Ready</div>
               <p className="text-xs text-slate-500">108 &amp; 104 hotline integrations.</p>
@@ -375,7 +393,7 @@ export function SuperAdminDashboard({ user, activeTab, setTab }: SuperAdminDashb
       {/* ─── ADMIN ACCOUNT TAB ───────────────────────────────────────────────── */}
       {activeTab === "profile" && (
         <div className="space-y-6 max-w-2xl">
-          <div className="bg-white rounded-[28px] p-6 border border-slate-200/80 shadow-xs space-y-4 text-xs">
+          <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs space-y-4 text-xs">
             <h3 className="text-base font-black text-slate-900">State Super Admin Credentials</h3>
             <div className="grid grid-cols-2 gap-3">
               <div className="p-3.5 bg-[#EFF2F5] rounded-2xl">
@@ -402,10 +420,12 @@ export function SuperAdminDashboard({ user, activeTab, setTab }: SuperAdminDashb
       {/* ─── PROVISION DHO MODAL ─────────────────────────────────────────────── */}
       {showDhoModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-[32px] max-w-lg w-full p-6 sm:p-8 space-y-4 shadow-2xl border border-slate-200 animate-in fade-in zoom-in duration-200">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 space-y-4 shadow-2xl border border-slate-200">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-black text-slate-900">Provision District Health Officer (DHO)</h3>
-              <button onClick={() => setShowDhoModal(false)} className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:text-slate-900">✕</button>
+              <button onClick={() => setShowDhoModal(false)} className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:text-slate-900">
+                <X className="w-4 h-4" />
+              </button>
             </div>
 
             <form onSubmit={handleProvisionDho} className="space-y-4 text-xs">
@@ -459,10 +479,10 @@ export function SuperAdminDashboard({ user, activeTab, setTab }: SuperAdminDashb
               </div>
 
               <div className="pt-2 flex items-center justify-end gap-2">
-                <button type="button" onClick={() => setShowDhoModal(false)} className="px-4 py-2.5 rounded-full text-slate-600 hover:bg-slate-100 font-bold">
+                <button type="button" onClick={() => setShowDhoModal(false)} className="px-4 py-2.5 rounded-2xl text-slate-600 hover:bg-slate-100 font-bold">
                   Cancel
                 </button>
-                <button type="submit" className="px-6 py-2.5 rounded-full bg-[#0E4A43] text-white font-black hover:bg-[#083530]">
+                <button type="submit" className="px-6 py-2.5 rounded-2xl bg-[#0E4A43] text-white font-black hover:brightness-110 shadow-md">
                   Create DHO Account
                 </button>
               </div>
@@ -474,10 +494,12 @@ export function SuperAdminDashboard({ user, activeTab, setTab }: SuperAdminDashb
       {/* ─── REGISTER FACILITY MODAL ─────────────────────────────────────────── */}
       {showFacModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-[32px] max-w-lg w-full p-6 sm:p-8 space-y-4 shadow-2xl border border-slate-200 animate-in fade-in zoom-in duration-200">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 space-y-4 shadow-2xl border border-slate-200">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-black text-slate-900">Register Healthcare Facility</h3>
-              <button onClick={() => setShowFacModal(false)} className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:text-slate-900">✕</button>
+              <button onClick={() => setShowFacModal(false)} className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:text-slate-900">
+                <X className="w-4 h-4" />
+              </button>
             </div>
 
             <form onSubmit={handleCreateFacility} className="space-y-4 text-xs">
@@ -526,10 +548,10 @@ export function SuperAdminDashboard({ user, activeTab, setTab }: SuperAdminDashb
               </div>
 
               <div className="pt-2 flex items-center justify-end gap-2">
-                <button type="button" onClick={() => setShowFacModal(false)} className="px-4 py-2.5 rounded-full text-slate-600 hover:bg-slate-100 font-bold">
+                <button type="button" onClick={() => setShowFacModal(false)} className="px-4 py-2.5 rounded-2xl text-slate-600 hover:bg-slate-100 font-bold">
                   Cancel
                 </button>
-                <button type="submit" className="px-6 py-2.5 rounded-full bg-[#0E4A43] text-white font-black hover:bg-[#083530]">
+                <button type="submit" className="px-6 py-2.5 rounded-2xl bg-[#0E4A43] text-white font-black hover:brightness-110 shadow-md">
                   Register Facility
                 </button>
               </div>
