@@ -161,27 +161,29 @@ export function SuperAdminDashboard({ user, activeTab, setTab }: SuperAdminDashb
           {/* Quick Metrics */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <button onClick={() => setTab("facilities")} className="bg-[#EFF2F5] hover:bg-slate-200/70 p-5 rounded-[24px] border border-slate-200/50 text-left transition-all group">
-              <div className="text-2xl font-black text-slate-900">{facilities.length || 24}</div>
+              <div className="text-2xl font-black text-slate-900">{facilities.length}</div>
               <div className="text-xs font-bold text-slate-700 mt-1">Hospitals &amp; PHCs</div>
-              <div className="text-[10px] text-slate-500">Across 36 districts</div>
+              <div className="text-[10px] text-slate-500">Registered across districts</div>
             </button>
 
             <button onClick={() => setTab("dho_management")} className="bg-[#EFF2F5] hover:bg-slate-200/70 p-5 rounded-[24px] border border-slate-200/50 text-left transition-all group">
-              <div className="text-2xl font-black text-indigo-700">{dhoList.length || 6} DHOs</div>
+              <div className="text-2xl font-black text-indigo-700">{dhoList.length} DHOs</div>
               <div className="text-xs font-bold text-slate-700 mt-1">District Health Officers</div>
               <div className="text-[10px] text-slate-500">Assigned district heads</div>
             </button>
 
             <button onClick={() => setTab("facilities")} className="bg-[#EFF2F5] hover:bg-slate-200/70 p-5 rounded-[24px] border border-slate-200/50 text-left transition-all group">
-              <div className="text-2xl font-black text-emerald-700">4,200+</div>
+              <div className="text-2xl font-black text-emerald-700">
+                {facilities.reduce((acc, f) => acc + (f.bedStatus?.availableBeds ?? 0), 0)} / {facilities.reduce((acc, f) => acc + (f.bedStatus?.totalBeds ?? 0), 0)}
+              </div>
               <div className="text-xs font-bold text-slate-700 mt-1">Live Inpatient Beds</div>
-              <div className="text-[10px] text-slate-500">State capacity</div>
+              <div className="text-[10px] text-slate-500">Vacant / State Capacity</div>
             </button>
 
             <button onClick={() => setTab("system_health")} className="bg-[#EFF2F5] hover:bg-slate-200/70 p-5 rounded-[24px] border border-slate-200/50 text-left transition-all group">
-              <div className="text-2xl font-black text-[#0E4A43]">99.98%</div>
-              <div className="text-xs font-bold text-slate-700 mt-1">Tele-OPD Uptime</div>
-              <div className="text-[10px] text-slate-500">System latency &lt; 80ms</div>
+              <div className="text-2xl font-black text-[#0E4A43]">{staff.length}</div>
+              <div className="text-xs font-bold text-slate-700 mt-1">Provisioned Personnel</div>
+              <div className="text-[10px] text-slate-500">Doctors, ASHA, Admins</div>
             </button>
           </div>
 

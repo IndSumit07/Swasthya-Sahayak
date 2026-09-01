@@ -1,10 +1,5 @@
 /**
  * api.ts — Typed fetch wrapper for all client → Express server communication.
- *
- * Design principles:
- * - credentials: 'include' so the browser automatically sends the httpOnly session cookie.
- * - Centralised base URL from NEXT_PUBLIC_API_URL env variable.
- * - Throws on non-2xx so callers can use try/catch without inspecting status manually.
  */
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
@@ -50,7 +45,7 @@ export async function apiFetch<T = unknown>(
   return response.json() as Promise<T>;
 }
 
-// ─── Typed API helpers ────────────────────────────────────────────────────────
+// ─── Auth API ─────────────────────────────────────────────────────────────────
 
 export const authApi = {
   register: (body: { email: string; password: string; fullName: string; phone?: string }) =>
@@ -78,6 +73,8 @@ export const authApi = {
     apiFetch<{ success: boolean }>('/auth/refresh', { method: 'POST' }),
 };
 
+// ─── Profile API ──────────────────────────────────────────────────────────────
+
 export const profileApi = {
   step1: (body: PatientStep1Body) =>
     apiFetch('/profile/patient/step/1', { method: 'PATCH', body: body as unknown as Record<string, unknown> }),
@@ -88,6 +85,8 @@ export const profileApi = {
   me: () =>
     apiFetch<{ success: boolean; data: UserProfile }>('/profile/me'),
 };
+
+// ─── Facilities API ───────────────────────────────────────────────────────────
 
 export const facilitiesApi = {
   list: (params?: { district?: string; type?: string; search?: string; hasAvailableBeds?: boolean; service?: string }) => {
@@ -130,6 +129,197 @@ export const facilitiesApi = {
   upsertDiagnostic: (id: string, body: Partial<FacilityDiagnostic>) =>
     apiFetch<{ success: boolean; data: FacilityDiagnostic }>(`/facilities/${id}/diagnostics`, { method: 'PATCH', body: body as unknown as Record<string, unknown> }),
 };
+
+// ─── Appointments API ─────────────────────────────────────────────────────────
+
+export const appointmentsApi = {
+  list: (params?: { patientId?: string; doctorId?: string; facilityId?: string; status?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.patientId) query.set('patientId', params.patientId);
+    if (params?.doctorId) query.set('doctorId', params.doctorId);
+    if (params?.facilityId) query.set('facilityId', params.facilityId);
+    if (params?.status) query.set('status', params.status);
+    return apiFetch<{ success: boolean; data: Appointment[] }>(`/appointments?${query.toString()}`);
+  },
+
+  getById: (id: string) =>
+    apiFetch<{ success: boolean; data: Appointment }>(`/appointments/${id}`),
+
+  create: (body: { patientId?: string; facilityId: string; doctorId?: string; type?: string; appointmentDate: string; slot?: string; notes?: string }) =>
+    apiFetch<{ success: boolean; data: Appointment; message: string }>('/appointments', { method: 'POST', body }),
+
+  updateStatus: (id: string, status: string) =>
+    apiFetch<{ success: boolean; data: Appointment; message: string }>(`/appointments/${id}/status`, { method: 'PATCH', body: { status } }),
+
+  delete: (id: string) =>
+    apiFetch<{ success: boolean; message: string }>(`/appointments/${id}`, { method: 'DELETE' }),
+};
+
+// ─── Prescriptions API ────────────────────────────────────────────────────────
+
+export const prescriptionsApi = {
+  list: (params?: { patientId?: string; doctorId?: string; facilityId?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.patientId) query.set('patientId', params.patientId);
+    if (params?.doctorId) query.set('doctorId', params.doctorId);
+    if (params?.facilityId) query.set('facilityId', params.facilityId);
+    return apiFetch<{ success: boolean; data: Prescription[] }>(`/prescriptions?${query.toString()}`);
+  },
+
+  getById: (id: string) =>
+    apiFetch<{ success: boolean; data: Prescription }>(`/prescriptions/${id}`),
+
+  create: (body: {
+    patientId: string;
+    doctorId?: string;
+    facilityId: string;
+    diagnosis: string;
+    advice?: string;
+    followUpDate?: string;
+    items: Array<{ medicineName: string; dosage: string; duration: string; frequency?: string; instructions?: string; inStock?: boolean }>;
+  }) =>
+    apiFetch<{ success: boolean; data: Prescription; message: string }>('/prescriptions', { method: 'POST', body }),
+
+  delete: (id: string) =>
+    apiFetch<{ success: boolean; message: string }>(`/prescriptions/${id}`, { method: 'DELETE' }),
+};
+
+// ─── Referrals API ────────────────────────────────────────────────────────────
+
+export const referralsApi = {
+  list: (params?: { patientId?: string; fromFacilityId?: string; toFacilityId?: string; status?: string; priority?: string; district?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.patientId) query.set('patientId', params.patientId);
+    if (params?.fromFacilityId) query.set('fromFacilityId', params.fromFacilityId);
+    if (params?.toFacilityId) query.set('toFacilityId', params.toFacilityId);
+    if (params?.status) query.set('status', params.status);
+    if (params?.priority) query.set('priority', params.priority);
+    if (params?.district) query.set('district', params.district);
+    return apiFetch<{ success: boolean; data: Referral[] }>(`/referrals?${query.toString()}`);
+  },
+
+  getById: (id: string) =>
+    apiFetch<{ success: boolean; data: Referral }>(`/referrals/${id}`),
+
+  create: (body: {
+    patientId: string;
+    fromFacilityId: string;
+    toFacilityId: string;
+    reason: string;
+    requiredSpecialty?: string;
+    priority?: string;
+    notes?: string;
+  }) =>
+    apiFetch<{ success: boolean; data: Referral; message: string }>('/referrals', { method: 'POST', body }),
+
+  updateStatus: (id: string, status: string) =>
+    apiFetch<{ success: boolean; data: Referral; message: string }>(`/referrals/${id}/status`, { method: 'PATCH', body: { status } }),
+
+  delete: (id: string) =>
+    apiFetch<{ success: boolean; message: string }>(`/referrals/${id}`, { method: 'DELETE' }),
+};
+
+// ─── Doorstep Triage API ──────────────────────────────────────────────────────
+
+export const triageApi = {
+  list: (params?: { patientId?: string; assessedById?: string; facilityId?: string; priority?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.patientId) query.set('patientId', params.patientId);
+    if (params?.assessedById) query.set('assessedById', params.assessedById);
+    if (params?.facilityId) query.set('facilityId', params.facilityId);
+    if (params?.priority) query.set('priority', params.priority);
+    return apiFetch<{ success: boolean; data: TriageAssessment[] }>(`/triage?${query.toString()}`);
+  },
+
+  create: (body: {
+    patientId?: string;
+    patientName: string;
+    patientAge?: number;
+    patientGender?: string;
+    village?: string;
+    facilityId?: string;
+    bpSystolic?: number;
+    bpDiastolic?: number;
+    spo2?: number;
+    temperature?: number;
+    pulse?: number;
+    symptoms?: string[];
+    isPregnant?: boolean;
+    notes?: string;
+  }) =>
+    apiFetch<{ success: boolean; data: TriageAssessment; message: string }>('/triage', { method: 'POST', body }),
+
+  delete: (id: string) =>
+    apiFetch<{ success: boolean; message: string }>(`/triage/${id}`, { method: 'DELETE' }),
+};
+
+// ─── Maternal & Child Health (MCH) API ────────────────────────────────────────
+
+export const mchApi = {
+  list: (params?: { healthWorkerId?: string; facilityId?: string; riskLevel?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.healthWorkerId) query.set('healthWorkerId', params.healthWorkerId);
+    if (params?.facilityId) query.set('facilityId', params.facilityId);
+    if (params?.riskLevel) query.set('riskLevel', params.riskLevel);
+    return apiFetch<{ success: boolean; data: MchRecord[] }>(`/mch?${query.toString()}`);
+  },
+
+  create: (body: {
+    patientId?: string;
+    healthWorkerId?: string;
+    facilityId?: string;
+    motherName: string;
+    age?: number;
+    village?: string;
+    edd?: string;
+    trimester?: string;
+    riskLevel?: string;
+    ancCount?: number;
+    hemoglobin?: number;
+    ifaDelivered?: boolean;
+    notes?: string;
+  }) =>
+    apiFetch<{ success: boolean; data: MchRecord; message: string }>('/mch', { method: 'POST', body }),
+
+  update: (id: string, body: Partial<MchRecord>) =>
+    apiFetch<{ success: boolean; data: MchRecord; message: string }>(`/mch/${id}`, { method: 'PATCH', body }),
+
+  delete: (id: string) =>
+    apiFetch<{ success: boolean; message: string }>(`/mch/${id}`, { method: 'DELETE' }),
+};
+
+// ─── Diagnostic Reports API ───────────────────────────────────────────────────
+
+export const diagnosticReportsApi = {
+  list: (params?: { patientId?: string; facilityId?: string; doctorId?: string; status?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.patientId) query.set('patientId', params.patientId);
+    if (params?.facilityId) query.set('facilityId', params.facilityId);
+    if (params?.doctorId) query.set('doctorId', params.doctorId);
+    if (params?.status) query.set('status', params.status);
+    return apiFetch<{ success: boolean; data: DiagnosticReport[] }>(`/diagnostics/reports?${query.toString()}`);
+  },
+
+  create: (body: {
+    patientId: string;
+    facilityId: string;
+    doctorId?: string;
+    testName: string;
+    category?: string;
+    status?: string;
+    sampleCollectedAt?: string;
+    keyResult: string;
+    findings?: string;
+    normalRange?: string;
+    verifiedBy?: string;
+  }) =>
+    apiFetch<{ success: boolean; data: DiagnosticReport; message: string }>('/diagnostics/reports', { method: 'POST', body }),
+
+  delete: (id: string) =>
+    apiFetch<{ success: boolean; message: string }>(`/diagnostics/reports/${id}`, { method: 'DELETE' }),
+};
+
+// ─── Admin API ────────────────────────────────────────────────────────────────
 
 export const adminApi = {
   provisionUser: (body: {
@@ -209,8 +399,8 @@ export interface FacilityService {
   id?: string;
   facilityId: string;
   name: string;
-  category: string | null;
-  isActive: boolean;
+  category?: string;
+  isActive?: boolean;
 }
 
 export interface Facility {
@@ -227,50 +417,199 @@ export interface Facility {
   contactEmail: string | null;
   workingHours: string | null;
   isActive: boolean;
-  services?: FacilityService[];
   bedStatus?: FacilityBedStatus | null;
+  services?: FacilityService[];
   medicines?: FacilityMedicine[];
   diagnostics?: FacilityDiagnostic[];
-  doctors?: {
+  doctors?: DoctorProfile[];
+}
+
+export interface DoctorProfile {
+  id: string;
+  userId: string;
+  specialty: string | null;
+  qualification: string | null;
+  registrationNo: string | null;
+  facilityId?: string | null;
+  facility?: Facility | null;
+  user?: {
+    fullName: string;
+    email: string;
+    phone?: string | null;
+  };
+}
+
+export interface Appointment {
+  id: string;
+  patientId: string;
+  doctorId: string | null;
+  facilityId: string;
+  type: 'IN_PERSON' | 'TELE_OPD';
+  appointmentDate: string;
+  slot: string;
+  status: 'BOOKED' | 'CONFIRMED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+  token: string | null;
+  notes: string | null;
+  createdAt: string;
+  facility?: Facility;
+  doctor?: DoctorProfile | null;
+  patient?: {
     id: string;
-    specialty: string | null;
-    qualification: string | null;
-    registrationNo?: string | null;
-    isAvailable?: boolean;
-    user?: { id: string; fullName: string; email?: string | null; phone?: string | null };
-  }[];
-  workers?: {
+    user?: {
+      fullName: string;
+      email: string;
+      phone?: string | null;
+    };
+  };
+}
+
+export interface PrescriptionItem {
+  id?: string;
+  prescriptionId?: string;
+  medicineName: string;
+  dosage: string;
+  duration: string;
+  frequency?: string | null;
+  instructions?: string | null;
+  inStock: boolean;
+}
+
+export interface Prescription {
+  id: string;
+  patientId: string;
+  doctorId: string;
+  facilityId: string;
+  diagnosis: string;
+  advice: string | null;
+  followUpDate: string | null;
+  createdAt: string;
+  items: PrescriptionItem[];
+  facility?: Facility;
+  doctor?: DoctorProfile;
+  patient?: {
     id: string;
-    workerType: string | null;
-    villageArea: string | null;
-    user?: { id: string; fullName: string; phone?: string | null };
-  }[];
-  admins?: {
+    user?: {
+      fullName: string;
+      email: string;
+      phone?: string | null;
+    };
+  };
+}
+
+export interface Referral {
+  id: string;
+  patientId: string;
+  fromFacilityId: string;
+  toFacilityId: string;
+  createdById: string;
+  reason: string;
+  requiredSpecialty: string | null;
+  priority: 'ROUTINE' | 'URGENT' | 'HIGH' | 'CRITICAL';
+  status: 'CREATED' | 'ACCEPTED' | 'BED_RESERVED' | 'PATIENT_ARRIVED' | 'COMPLETED' | 'CANCELLED';
+  notes: string | null;
+  createdAt: string;
+  fromFacility?: Facility;
+  toFacility?: Facility;
+  createdBy?: {
     id: string;
-    user?: { id: string; fullName: string; email: string | null };
-  }[];
+    fullName: string;
+    email: string;
+    role: string;
+  };
+  patient?: {
+    id: string;
+    user?: {
+      fullName: string;
+      phone?: string | null;
+    };
+  };
+}
+
+export interface TriageAssessment {
+  id: string;
+  patientId: string | null;
+  patientName: string;
+  patientAge: number | null;
+  patientGender: 'MALE' | 'FEMALE' | 'OTHER' | 'PREFER_NOT_TO_SAY' | null;
+  village: string | null;
+  assessedById: string;
+  facilityId: string | null;
+  bpSystolic: number | null;
+  bpDiastolic: number | null;
+  spo2: number | null;
+  temperature: number | null;
+  pulse: number | null;
+  symptoms: string[];
+  isPregnant: boolean;
+  priority: 'ROUTINE' | 'MODERATE' | 'CRITICAL';
+  actionTaken: string | null;
+  notes: string | null;
+  createdAt: string;
+  facility?: Facility | null;
+  assessedBy?: {
+    id: string;
+    fullName: string;
+    email: string;
+  };
+}
+
+export interface MchRecord {
+  id: string;
+  patientId: string | null;
+  healthWorkerId: string | null;
+  facilityId: string | null;
+  motherName: string;
+  age: number | null;
+  village: string | null;
+  edd: string | null;
+  trimester: string | null;
+  riskLevel: 'NORMAL' | 'HIGH_RISK';
+  ancCount: number;
+  hemoglobin: number | null;
+  ifaDelivered: boolean;
+  notes: string | null;
+  createdAt: string;
+  facility?: Facility | null;
+  healthWorker?: {
+    id: string;
+    user?: {
+      fullName: string;
+      phone?: string | null;
+    };
+  } | null;
+}
+
+export interface DiagnosticReport {
+  id: string;
+  patientId: string;
+  facilityId: string;
+  doctorId: string | null;
+  testName: string;
+  category: string | null;
+  status: 'ORDERED' | 'SAMPLE_COLLECTED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+  sampleCollectedAt: string | null;
+  keyResult: string;
+  findings: string | null;
+  normalRange: string | null;
+  verifiedBy: string | null;
+  createdAt: string;
+  facility?: Facility;
+  doctor?: DoctorProfile | null;
 }
 
 export interface UserProfile {
   id: string;
-  role: UserRole;
-  status: string;
+  email: string;
   fullName: string;
-  email: string | null;
   phone: string | null;
-  avatarUrl: string | null;
-  preferredLang: string;
-  createdAt: string;
-  registrationProgress?: { currentStep: RegistrationStep } | null;
-  districtAdmin?: { id: string; district: string } | null;
-  facilityAdmin?: { id: string; facilityId: string; facility?: Facility } | null;
+  role: UserRole;
+  status: 'ACTIVE' | 'SUSPENDED' | 'PENDING_VERIFICATION';
   patient?: {
     id: string;
     dateOfBirth: string | null;
-    gender: string | null;
+    gender: 'MALE' | 'FEMALE' | 'OTHER' | 'PREFER_NOT_TO_SAY' | null;
     village: string | null;
     district: string | null;
-    state: string;
     pincode: string | null;
     abhaId: string | null;
     bloodGroup: string | null;
@@ -283,8 +622,26 @@ export interface UserProfile {
       notes: string | null;
     } | null;
   } | null;
-  doctor?: { id: string; specialty: string | null; qualification: string | null; registrationNo: string | null; facility?: Facility | null } | null;
-  healthWorker?: { id: string; workerType: string | null; villageArea: string | null; facility?: Facility | null } | null;
+  registrationProgress?: {
+    currentStep: RegistrationStep;
+  } | null;
+  doctor?: DoctorProfile | null;
+  healthWorker?: {
+    id: string;
+    workerType: string | null;
+    villageArea: string | null;
+    facilityId?: string | null;
+    facility?: Facility | null;
+  } | null;
+  facilityAdmin?: {
+    id: string;
+    facilityId: string;
+    facility?: Facility | null;
+  } | null;
+  districtAdmin?: {
+    id: string;
+    district: string;
+  } | null;
 }
 
 export interface PatientStep1Body {
@@ -293,10 +650,10 @@ export interface PatientStep1Body {
   village?: string;
   district?: string;
   pincode?: string;
-  abhaId?: string;
-  bloodGroup?: string;
   emergencyContactName?: string;
   emergencyContactPhone?: string;
+  bloodGroup?: string;
+  abhaId?: string;
 }
 
 export interface PatientStep2Body {

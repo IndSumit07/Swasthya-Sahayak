@@ -53,10 +53,56 @@ enum FacilityType {
   PHARMACY
 }
 
+enum AppointmentType {
+  IN_PERSON
+  TELE_OPD
+}
+
+enum AppointmentStatus {
+  BOOKED
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum ReferralPriority {
+  ROUTINE
+  URGENT
+  HIGH
+  CRITICAL
+}
+
+enum ReferralStatus {
+  CREATED
+  ACCEPTED
+  BED_RESERVED
+  PATIENT_ARRIVED
+  COMPLETED
+  CANCELLED
+}
+
+enum TriagePriority {
+  ROUTINE
+  MODERATE
+  CRITICAL
+}
+
+enum MchRiskLevel {
+  NORMAL
+  HIGH_RISK
+}
+
+enum DiagnosticStatus {
+  ORDERED
+  SAMPLE_COLLECTED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
 // ─── Core Identity ────────────────────────────────────────────────────────────
 
-// Mirrors supabase auth.users 1:1 by id.
-// `role` is ONLY read from this table for authorization — never from JWT claims.
 model User {
   id            String     @id // == supabase auth.users.id (UUID)
   role          UserRole
@@ -75,11 +121,12 @@ model User {
   facilityAdmin        FacilityAdmin?
   districtAdmin        DistrictAdmin?
   registrationProgress RegistrationProgress?
+  createdReferrals     Referral[]             @relation("UserCreatedReferrals")
+  assessedTriages      TriageAssessment[]     @relation("UserAssessedTriages")
 
   @@map("users")
 }
 
-// Tracks multi-step registration funnel progress per user.
 model RegistrationProgress {
   id          String           @id @default(uuid())
   userId      String           @unique @map("user_id")
@@ -111,7 +158,13 @@ model Patient {
   createdAt             DateTime  @default(now()) @map("created_at")
   updatedAt             DateTime  @updatedAt @map("updated_at")
 
-  medicalHistory MedicalHistory?
+  medicalHistory    MedicalHistory?
+  appointments      Appointment[]
+  prescriptions     Prescription[]
+  referrals         Referral[]
+  triageAssessments TriageAssessment[]
+  mchRecords        MchRecord[]
+  diagnosticReports DiagnosticReport[]
 
   @@index([district])
   @@map("patients")
@@ -172,6 +225,11 @@ model Doctor {
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")
 
+  appointments      Appointment[]
+  prescriptions     Prescription[]
+  rosterEntries     DoctorRoster[]
+  diagnosticReports DiagnosticReport[]
+
   @@index([facilityId])
   @@index([specialty])
   @@map("doctors")
@@ -190,11 +248,13 @@ model HealthWorker {
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
+  mchRecords MchRecord[]
+
   @@index([facilityId])
   @@map("health_workers")
 }
 
-// ─── Facilities & Resources (Module 2) ────────────────────────────────────────
+// ─── Facilities & Resources ──────────────────────────────────────────────────
 
 model Facility {
   id           String       @id @default(uuid())
@@ -213,14 +273,22 @@ model Facility {
   createdAt    DateTime     @default(now()) @map("created_at")
   updatedAt    DateTime     @updatedAt @map("updated_at")
 
-  services    FacilityService[]
-  bedStatus   FacilityBedStatus?
-  medicines   FacilityMedicine[]
-  diagnostics FacilityDiagnostic[]
-  doctors     Doctor[]
-  workers     HealthWorker[]
-  admins      FacilityAdmin[]
-  patients    Patient[]
+  services          FacilityService[]
+  bedStatus         FacilityBedStatus?
+  medicines         FacilityMedicine[]
+  diagnostics       FacilityDiagnostic[]
+  doctors           Doctor[]
+  workers           HealthWorker[]
+  admins            FacilityAdmin[]
+  patients          Patient[]
+  appointments      Appointment[]
+  prescriptions     Prescription[]
+  referralsFrom     Referral[]          @relation("FromFacility")
+  referralsTo       Referral[]          @relation("ToFacility")
+  triageAssessments TriageAssessment[]
+  mchRecords        MchRecord[]
+  doctorRosters     DoctorRoster[]
+  diagnosticReports DiagnosticReport[]
 
   @@index([district])
   @@index([type])
@@ -288,4 +356,198 @@ model FacilityDiagnostic {
   @@unique([facilityId, testName])
   @@index([testName])
   @@map("facility_diagnostics")
+}
+
+// ─── Appointments & Consultations ─────────────────────────────────────────────
+
+model Appointment {
+  id              String            @id @default(uuid())
+  patientId       String            @map("patient_id")
+  patient         Patient           @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctorId        String?           @map("doctor_id")
+  doctor          Doctor?           @relation(fields: [doctorId], references: [id], onDelete: SetNull)
+  facilityId      String            @map("facility_id")
+  facility        Facility          @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  type            AppointmentType   @default(IN_PERSON)
+  appointmentDate DateTime          @map("appointment_date") @db.Date
+  slot            String            @default("10:00 AM - 11:00 AM")
+  status          AppointmentStatus @default(BOOKED)
+  token           String?
+  notes           String?
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+
+  @@index([patientId])
+  @@index([doctorId])
+  @@index([facilityId, appointmentDate])
+  @@map("appointments")
+}
+
+// ─── Digital Prescriptions (E-Rx) ─────────────────────────────────────────────
+
+model Prescription {
+  id           String             @id @default(uuid())
+  patientId    String             @map("patient_id")
+  patient      Patient            @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctorId     String             @map("doctor_id")
+  doctor       Doctor             @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  facilityId   String             @map("facility_id")
+  facility     Facility           @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  diagnosis    String
+  advice       String?
+  followUpDate DateTime?          @map("follow_up_date") @db.Date
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
+
+  items PrescriptionItem[]
+
+  @@index([patientId])
+  @@index([doctorId])
+  @@map("prescriptions")
+}
+
+model PrescriptionItem {
+  id             String       @id @default(uuid())
+  prescriptionId String       @map("prescription_id")
+  prescription   Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  medicineName   String       @map("medicine_name")
+  dosage         String       // e.g. "1 tablet thrice daily"
+  duration       String       // e.g. "5 days"
+  frequency      String?      // e.g. "TDS"
+  instructions   String?      // e.g. "After food"
+  inStock        Boolean      @default(true) @map("in_stock")
+
+  @@map("prescription_items")
+}
+
+// ─── Inter-Facility Referrals ─────────────────────────────────────────────────
+
+model Referral {
+  id                String           @id @default(uuid())
+  patientId         String           @map("patient_id")
+  patient           Patient          @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  fromFacilityId    String           @map("from_facility_id")
+  fromFacility      Facility         @relation("FromFacility", fields: [fromFacilityId], references: [id], onDelete: Cascade)
+  toFacilityId      String           @map("to_facility_id")
+  toFacility        Facility         @relation("ToFacility", fields: [toFacilityId], references: [id], onDelete: Cascade)
+  createdById       String           @map("created_by_id")
+  createdBy         User             @relation("UserCreatedReferrals", fields: [createdById], references: [id], onDelete: Restrict)
+  reason            String
+  requiredSpecialty String?          @map("required_specialty")
+  priority          ReferralPriority @default(ROUTINE)
+  status            ReferralStatus   @default(CREATED)
+  notes             String?
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+
+  @@index([patientId])
+  @@index([fromFacilityId])
+  @@index([toFacilityId])
+  @@map("referrals")
+}
+
+// ─── Doorstep Clinical Triage ─────────────────────────────────────────────────
+
+model TriageAssessment {
+  id            String         @id @default(uuid())
+  patientId     String?        @map("patient_id")
+  patient       Patient?       @relation(fields: [patientId], references: [id], onDelete: SetNull)
+  patientName   String         @map("patient_name")
+  patientAge    Int?           @map("patient_age")
+  patientGender Gender?        @map("patient_gender")
+  village       String?
+  assessedById  String         @map("assessed_by_id")
+  assessedBy    User           @relation("UserAssessedTriages", fields: [assessedById], references: [id], onDelete: Restrict)
+  facilityId    String?        @map("facility_id")
+  facility      Facility?      @relation(fields: [facilityId], references: [id], onDelete: SetNull)
+  bpSystolic    Int?           @map("bp_systolic")
+  bpDiastolic   Int?           @map("bp_diastolic")
+  spo2          Int?
+  temperature   Decimal?       @db.Decimal(4, 1)
+  pulse         Int?
+  symptoms      String[]       @default([])
+  isPregnant    Boolean        @default(false) @map("is_pregnant")
+  priority      TriagePriority @default(ROUTINE)
+  actionTaken   String?        @map("action_taken")
+  notes         String?
+  createdAt     DateTime       @default(now()) @map("created_at")
+
+  @@index([assessedById])
+  @@index([facilityId])
+  @@map("triage_assessments")
+}
+
+// ─── Maternal & Child Health (MCH) ────────────────────────────────────────────
+
+model MchRecord {
+  id             String       @id @default(uuid())
+  patientId      String?      @map("patient_id")
+  patient        Patient?     @relation(fields: [patientId], references: [id], onDelete: SetNull)
+  healthWorkerId String?      @map("health_worker_id")
+  healthWorker   HealthWorker? @relation(fields: [healthWorkerId], references: [id], onDelete: SetNull)
+  facilityId     String?      @map("facility_id")
+  facility       Facility?    @relation(fields: [facilityId], references: [id], onDelete: SetNull)
+  motherName     String       @map("mother_name")
+  age            Int?
+  village        String?
+  edd            DateTime?    @map("edd") @db.Date
+  trimester      String?
+  riskLevel      MchRiskLevel @default(NORMAL) @map("risk_level")
+  ancCount       Int          @default(0) @map("anc_count")
+  hemoglobin     Decimal?     @db.Decimal(4, 1)
+  ifaDelivered   Boolean      @default(false) @map("ifa_delivered")
+  notes          String?
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  @@index([healthWorkerId])
+  @@index([facilityId])
+  @@map("mch_records")
+}
+
+// ─── Diagnostic Lab Reports ───────────────────────────────────────────────────
+
+model DiagnosticReport {
+  id                String           @id @default(uuid())
+  patientId         String           @map("patient_id")
+  patient           Patient          @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  facilityId        String           @map("facility_id")
+  facility          Facility         @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  doctorId          String?          @map("doctor_id")
+  doctor            Doctor?          @relation(fields: [doctorId], references: [id], onDelete: SetNull)
+  testName          String           @map("test_name")
+  category          String?
+  status            DiagnosticStatus @default(COMPLETED)
+  sampleCollectedAt DateTime?        @map("sample_collected_at")
+  keyResult         String           @map("key_result")
+  findings          String?
+  normalRange       String?          @map("normal_range")
+  verifiedBy        String?          @map("verified_by")
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+
+  @@index([patientId])
+  @@index([facilityId])
+  @@map("diagnostic_reports")
+}
+
+// ─── Doctor Duty Roster ───────────────────────────────────────────────────────
+
+model DoctorRoster {
+  id         String   @id @default(uuid())
+  facilityId String   @map("facility_id")
+  facility   Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  doctorId   String   @map("doctor_id")
+  doctor     Doctor   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  shiftName  String   @map("shift_name") // e.g. "Morning (09:00 - 15:00)"
+  startTime  String   @map("start_time")
+  endTime    String   @map("end_time")
+  status     String   @default("ON_DUTY") // "ON_DUTY", "SCHEDULED", "OFF_DUTY"
+  tokenQuota Int      @default(30) @map("token_quota")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@index([facilityId])
+  @@index([doctorId])
+  @@map("doctor_rosters")
 }

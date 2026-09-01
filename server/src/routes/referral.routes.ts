@@ -1,0 +1,15 @@
+import { Router } from "express";
+import { ReferralController } from "../controllers/referral.controller";
+import { authenticate } from "../middlewares/auth.middleware";
+
+const router = Router();
+
+router.use(authenticate);
+
+router.get("/", ReferralController.list);
+router.get("/:id", ReferralController.getById);
+router.post("/", ReferralController.create);
+router.patch("/:id/status", ReferralController.updateStatus);
+router.delete("/:id", ReferralController.delete);
+
+export default router;

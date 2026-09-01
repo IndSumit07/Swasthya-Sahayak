@@ -2,7 +2,14 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { adminApi, facilitiesApi, type UserProfile, type Facility } from "@/lib/api";
+import {
+  adminApi,
+  facilitiesApi,
+  referralsApi,
+  type UserProfile,
+  type Facility,
+  type Referral,
+} from "@/lib/api";
 
 interface DistrictAdminDashboardProps {
   user: UserProfile;
@@ -16,6 +23,7 @@ export function DistrictAdminDashboard({ user, activeTab, setTab }: DistrictAdmi
   const [summary, setSummary] = useState<{ totalFacilities: number; totalBeds: number; availableBeds: number; totalDoctors: number } | null>(null);
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [staff, setStaff] = useState<UserProfile[]>([]);
+  const [referrals, setReferrals] = useState<Referral[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Facility Registration Modal
@@ -40,16 +48,27 @@ export function DistrictAdminDashboard({ user, activeTab, setTab }: DistrictAdmi
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [sumRes, facRes, staffRes] = await Promise.all([
-        adminApi.getDistrictSummary(districtName).catch(() => ({ data: { district: districtName, totalFacilities: 18, totalBeds: 450, availableBeds: 180, totalDoctors: 64 } })),
+      const [sumRes, facRes, staffRes, refRes] = await Promise.allSettled([
+        adminApi.getDistrictSummary(districtName),
         facilitiesApi.list({ district: districtName }),
-        adminApi.listStaff({ district: districtName }).catch(() => ({ data: [] })),
+        adminApi.listStaff({ district: districtName }),
+        referralsApi.list({ district: districtName }),
       ]);
-      setSummary(sumRes.data);
-      setFacilities(facRes.data.facilities);
-      setStaff(staffRes.data);
-      if (facRes.data.facilities.length > 0) {
-        setStaffFacilityId(facRes.data.facilities[0].id);
+
+      if (sumRes.status === "fulfilled" && sumRes.value.success) {
+        setSummary(sumRes.value.data);
+      }
+      if (facRes.status === "fulfilled" && facRes.value.success) {
+        setFacilities(facRes.value.data.facilities);
+        if (facRes.value.data.facilities.length > 0 && !staffFacilityId) {
+          setStaffFacilityId(facRes.value.data.facilities[0].id);
+        }
+      }
+      if (staffRes.status === "fulfilled" && staffRes.value.success) {
+        setStaff(staffRes.value.data);
+      }
+      if (refRes.status === "fulfilled" && refRes.value.success) {
+        setReferrals(refRes.value.data);
       }
     } catch (err) {
       console.warn("Failed to load district admin data:", err);
@@ -108,118 +127,125 @@ export function DistrictAdminDashboard({ user, activeTab, setTab }: DistrictAdmi
     }
   };
 
+  const handleUpdateReferralStatus = async (id: string, status: string) => {
+    try {
+      await referralsApi.updateStatus(id, status);
+      await fetchData();
+    } catch (err: any) {
+      alert(err.message || "Failed to update referral status.");
+    }
+  };
+
   return (
-    <div className="space-y-6">
-      {/* ─── DISTRICT COMMAND OVERVIEW ────────────────────────────────────────── */}
+    <div className="space-y-6 max-w-6xl">
+      {/* ─── DISTRICT OVERVIEW TAB ───────────────────────────────────────────── */}
       {activeTab === "overview" && (
         <div className="space-y-6">
           {/* Header Banner */}
-          <div className="bg-[#0E4A43] text-white rounded-[32px] p-6 sm:p-8 relative overflow-hidden shadow-xs">
-            <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-              <div className="space-y-2 max-w-xl">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#E5F973]/20 border border-[#E5F973]/30 text-[#E5F973] text-xs font-bold">
+          <div className="relative overflow-hidden rounded-3xl bg-linear-to-br from-[#0E4A43] via-[#093530] to-[#041c19] p-8 text-white shadow-xl">
+            <div className="absolute right-0 top-0 w-96 h-96 bg-[#E5F973]/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="space-y-2">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-[#E5F973] text-xs font-bold uppercase tracking-wider">
                   <span className="w-2 h-2 rounded-full bg-[#E5F973] animate-pulse" />
-                  District Health Officer (DHO) Command Console
+                  District Health Office Command Center &bull; {districtName} District
                 </div>
-                <h2 className="text-2xl sm:text-3xl font-black font-heading">
-                  {districtName} District Administration
-                </h2>
-                <p className="text-xs sm:text-sm text-emerald-100/90 leading-relaxed">
-                  Supervise public health centres, bed allocation, clinical manpower, and patient transfers across all talukas in {districtName}.
+                <h1 className="text-2xl sm:text-3xl font-black">{user.fullName}</h1>
+                <p className="text-slate-300 text-xs sm:text-sm max-w-xl">
+                  Public Health Department &bull; District Health Administration for {districtName}, Maharashtra
                 </p>
-
-                <div className="pt-2 flex flex-wrap gap-2.5">
-                  <button
-                    onClick={() => setShowFacModal(true)}
-                    className="px-5 py-2.5 rounded-full bg-[#E5F973] text-slate-950 text-xs font-black hover:bg-[#d8ec68] transition-all shadow-xs flex items-center gap-1.5 active:scale-95"
-                  >
-                    + Register Healthcare Facility
-                  </button>
-                  <button
-                    onClick={() => setShowStaffModal(true)}
-                    className="px-5 py-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all border border-white/20"
-                  >
-                    + Provision Medical Staff / Admin
-                  </button>
-                </div>
               </div>
-
-              {/* District Status Card */}
-              <div className="bg-white/10 backdrop-blur-md rounded-2xl p-5 border border-white/15 w-full lg:w-72 space-y-2 flex-shrink-0 text-xs">
-                <span className="text-[10px] font-bold uppercase text-emerald-200 block">District Health Index</span>
-                <div className="flex justify-between py-1 border-b border-white/10">
-                  <span className="text-emerald-100">Reporting Facilities:</span>
-                  <span className="font-bold text-[#E5F973]">{facilities.length || 18} Active</span>
-                </div>
-                <div className="flex justify-between py-1 border-b border-white/10">
-                  <span className="text-emerald-100">Live Available Beds:</span>
-                  <span className="font-bold text-white">{summary?.availableBeds ?? 180} Beds</span>
-                </div>
-                <div className="flex justify-between py-1">
-                  <span className="text-emerald-100">108 Referral Success:</span>
-                  <span className="font-bold text-emerald-300">98.4%</span>
-                </div>
+              <div className="flex flex-col sm:flex-row items-center gap-3">
+                <button
+                  onClick={() => setShowFacModal(true)}
+                  className="px-5 py-3 rounded-2xl bg-[#E5F973] text-[#0E4A43] font-black text-xs hover:brightness-105 active:scale-95 transition-all shadow-md"
+                >
+                  + Register New Facility
+                </button>
+                <button
+                  onClick={() => setShowStaffModal(true)}
+                  className="px-4 py-3 rounded-2xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs border border-white/15 transition-all"
+                >
+                  + Provision Staff
+                </button>
               </div>
             </div>
           </div>
 
           {/* Quick Metrics */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <button onClick={() => setTab("facilities")} className="bg-[#EFF2F5] hover:bg-slate-200/70 p-5 rounded-[24px] border border-slate-200/50 text-left transition-all group">
-              <div className="text-2xl font-black text-slate-900">{facilities.length || summary?.totalFacilities || 18}</div>
-              <div className="text-xs font-bold text-slate-700 mt-1">Health Facilities</div>
-              <div className="text-[10px] text-slate-500">Sub-Centres, PHCs &amp; Hospitals</div>
-            </button>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div
+              onClick={() => setTab("facilities")}
+              className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs hover:border-[#0E4A43]/40 cursor-pointer transition-all space-y-2 group"
+            >
+              <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-800 flex items-center justify-center font-black group-hover:scale-110 transition-transform">
+                🏥
+              </div>
+              <div className="text-2xl font-black text-slate-900">{facilities.length}</div>
+              <div className="text-xs font-bold text-slate-500">District Facilities</div>
+            </div>
 
-            <button onClick={() => setTab("facilities")} className="bg-[#EFF2F5] hover:bg-slate-200/70 p-5 rounded-[24px] border border-slate-200/50 text-left transition-all group">
-              <div className="text-2xl font-black text-emerald-700">{summary?.availableBeds ?? 180}</div>
-              <div className="text-xs font-bold text-slate-700 mt-1">Available Inpatient Beds</div>
-              <div className="text-[10px] text-slate-500">Across all talukas</div>
-            </button>
+            <div
+              onClick={() => setTab("facilities")}
+              className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs hover:border-[#0E4A43]/40 cursor-pointer transition-all space-y-2 group"
+            >
+              <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-800 flex items-center justify-center font-black group-hover:scale-110 transition-transform">
+                🛏️
+              </div>
+              <div className="text-2xl font-black text-slate-900">
+                {summary?.availableBeds ?? facilities.reduce((acc, f) => acc + (f.bedStatus?.availableBeds ?? 0), 0)}
+              </div>
+              <div className="text-xs font-bold text-slate-500">Available District Beds</div>
+            </div>
 
-            <button onClick={() => setTab("staff")} className="bg-[#EFF2F5] hover:bg-slate-200/70 p-5 rounded-[24px] border border-slate-200/50 text-left transition-all group">
-              <div className="text-2xl font-black text-[#0E4A43]">{summary?.totalDoctors ?? 64}</div>
-              <div className="text-xs font-bold text-slate-700 mt-1">Active Doctors</div>
-              <div className="text-[10px] text-slate-500">Medical officers on duty</div>
-            </button>
+            <div
+              onClick={() => setTab("staff")}
+              className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs hover:border-[#0E4A43]/40 cursor-pointer transition-all space-y-2 group"
+            >
+              <div className="w-10 h-10 rounded-2xl bg-purple-50 text-purple-800 flex items-center justify-center font-black group-hover:scale-110 transition-transform">
+                👥
+              </div>
+              <div className="text-2xl font-black text-slate-900">{staff.length}</div>
+              <div className="text-xs font-bold text-slate-500">Provisioned Staff</div>
+            </div>
 
-            <button onClick={() => setTab("referrals_audit")} className="bg-[#EFF2F5] hover:bg-slate-200/70 p-5 rounded-[24px] border border-slate-200/50 text-left transition-all group">
-              <div className="text-2xl font-black text-indigo-700">100%</div>
-              <div className="text-xs font-bold text-slate-700 mt-1">Taluka Network Coverage</div>
-              <div className="text-[10px] text-slate-500">Closed-loop referrals</div>
-            </button>
+            <div
+              onClick={() => setTab("referrals_audit")}
+              className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs hover:border-[#0E4A43]/40 cursor-pointer transition-all space-y-2 group"
+            >
+              <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-800 flex items-center justify-center font-black group-hover:scale-110 transition-transform">
+                🔄
+              </div>
+              <div className="text-2xl font-black text-slate-900">{referrals.length}</div>
+              <div className="text-xs font-bold text-slate-500">Inter-Facility Referrals</div>
+            </div>
           </div>
 
-          {/* District Facilities Table Preview */}
-          <div className="bg-white rounded-[28px] p-6 border border-slate-200/80 shadow-xs space-y-4">
+          {/* Quick Facility Registry Snapshot */}
+          <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs space-y-4">
             <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-black text-slate-900">District Public Health Centres</h3>
-                <p className="text-xs text-slate-500">Real-time status of Sub-Centres, PHCs, and District Hospitals in {districtName}.</p>
-              </div>
-              <button onClick={() => setTab("facilities")} className="text-xs text-[#0E4A43] font-bold hover:underline">
-                View All Directory &rsaquo;
+              <h2 className="text-base font-black text-slate-900">Hospitals &amp; Health Centres in {districtName}</h2>
+              <button onClick={() => setTab("facilities")} className="text-xs font-bold text-[#0E4A43] hover:underline">
+                View All Facilities &rarr;
               </button>
             </div>
 
-            <div className="divide-y divide-slate-100 border border-slate-100 rounded-2xl overflow-hidden text-xs">
-              {facilities.slice(0, 5).map((fac) => (
-                <div key={fac.id} className="p-4 bg-white hover:bg-slate-50 flex items-center justify-between gap-4 transition-colors">
+            <div className="divide-y divide-slate-100">
+              {facilities.slice(0, 4).map((fac) => (
+                <div key={fac.id} className="py-3 flex items-center justify-between text-xs">
                   <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-slate-900 text-sm">{fac.name}</span>
-                      <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 text-[10px] font-bold">
-                        {fac.type}
-                      </span>
-                    </div>
-                    <p className="text-slate-500 mt-0.5">{fac.village ? `${fac.village}, ` : ""}{fac.district} • Ph: {fac.contactPhone || "020-24381001"}</p>
+                    <span className="font-black text-slate-900">{fac.name}</span>
+                    <span className="text-slate-500 ml-2">({fac.type} &bull; {fac.village || "Urban"})</span>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-xl">
-                      {fac.bedStatus?.availableBeds ?? 5} / {fac.bedStatus?.totalBeds ?? 10} Beds Free
+                    <span className="text-emerald-800 font-bold">
+                      {fac.bedStatus?.availableBeds ?? 0} Beds Vacant
                     </span>
-                    <Link href={`/facilities/${fac.id}`} className="text-[#0E4A43] font-bold hover:underline">
-                      Live View &rsaquo;
+                    <Link
+                      href={`/facilities/${fac.id}`}
+                      className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px]"
+                    >
+                      Audit
                     </Link>
                   </div>
                 </div>
@@ -229,206 +255,198 @@ export function DistrictAdminDashboard({ user, activeTab, setTab }: DistrictAdmi
         </div>
       )}
 
-      {/* ─── DISTRICT FACILITIES DIRECTORY TAB ─────────────────────────────────── */}
+      {/* ─── DISTRICT FACILITIES DIRECTORY TAB ───────────────────────────────── */}
       {activeTab === "facilities" && (
         <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-black text-slate-900">Healthcare Facilities in {districtName}</h2>
-              <p className="text-xs text-slate-500">Monitor bed allocations, emergency readiness, and contact lines.</p>
+              <h2 className="text-xl font-black text-slate-900">District Healthcare Facilities Registry</h2>
+              <p className="text-xs text-slate-500">All public hospitals, CHCs, and PHCs across {districtName} district</p>
             </div>
             <button
               onClick={() => setShowFacModal(true)}
-              className="px-5 py-2.5 rounded-full bg-[#0E4A43] text-white text-xs font-black hover:bg-[#083530] transition-all shadow-xs flex items-center gap-1.5"
+              className="px-4 py-2.5 rounded-xl bg-[#0E4A43] text-white font-bold text-xs hover:brightness-110 shadow-xs"
             >
               + Register New Facility
             </button>
           </div>
 
-          <div className="bg-white rounded-[28px] border border-slate-200/80 shadow-xs overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-[#EFF2F5] text-slate-700 uppercase text-[10px] font-bold border-b border-slate-200">
-                  <tr>
-                    <th className="py-3 px-5">Facility Name</th>
-                    <th className="py-3 px-4">Type</th>
-                    <th className="py-3 px-4">Village / Taluka</th>
-                    <th className="py-3 px-4">Available Inpatient Beds</th>
-                    <th className="py-3 px-4 text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 font-medium">
-                  {facilities.map((fac) => (
-                    <tr key={fac.id} className="hover:bg-slate-50">
-                      <td className="py-3 px-5 font-black text-slate-900">{fac.name}</td>
-                      <td className="py-3 px-4">
-                        <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 text-[10px] font-bold">
-                          {fac.type}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-slate-600">{fac.village || "Taluka Center"}</td>
-                      <td className="py-3 px-4 font-bold text-emerald-700">
-                        {fac.bedStatus?.availableBeds ?? 0} / {fac.bedStatus?.totalBeds ?? 0} Beds Free
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <Link href={`/facilities/${fac.id}`} className="text-[#0E4A43] font-bold hover:underline">
-                          View Live &rsaquo;
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {facilities.map((fac) => (
+              <div key={fac.id} className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs space-y-3 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-black text-base text-slate-900">{fac.name}</span>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-100 text-emerald-800">
+                    {fac.type}
+                  </span>
+                </div>
+                <p className="text-slate-500">{fac.address || `${fac.village || "Taluka"}, ${fac.district}`}</p>
+                <div className="p-3 bg-[#EFF2F5] rounded-xl flex items-center justify-between">
+                  <div>General Beds: <strong className="text-slate-900">{fac.bedStatus?.availableBeds ?? 0} / {fac.bedStatus?.totalBeds ?? 0}</strong></div>
+                  <div>Oxygen Beds: <strong className="text-emerald-800">{fac.bedStatus?.oxygenBedsAvailable ?? 0}</strong></div>
+                  <div>ICU: <strong className="text-purple-800">{fac.bedStatus?.icuBedsAvailable ?? 0}</strong></div>
+                </div>
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-slate-400 font-mono text-[11px]">{fac.contactPhone || "24x7 Emergency"}</span>
+                  <Link
+                    href={`/facilities/${fac.id}`}
+                    className="px-3 py-1.5 rounded-xl bg-[#0E4A43] text-white font-bold text-[11px] hover:brightness-110"
+                  >
+                    View Facility Console
+                  </Link>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
 
-      {/* ─── STAFF PROVISIONING TAB ───────────────────────────────────────────── */}
+      {/* ─── STAFF PROVISIONING TAB ──────────────────────────────────────────── */}
       {activeTab === "staff" && (
         <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-black text-slate-900">District Staff &amp; Administrator Accounts</h2>
-              <p className="text-xs text-slate-500">Provision Facility Administrators, Medical Officers, and ASHA Health Workers.</p>
+              <h2 className="text-xl font-black text-slate-900">District Clinical &amp; Admin Staff Register</h2>
+              <p className="text-xs text-slate-500">Provision Facility Administrators, Medical Officers, and ASHA Health Workers</p>
             </div>
             <button
               onClick={() => setShowStaffModal(true)}
-              className="px-5 py-2.5 rounded-full bg-[#0E4A43] text-white text-xs font-black hover:bg-[#083530] transition-all shadow-xs flex items-center gap-1.5"
+              className="px-4 py-2.5 rounded-xl bg-[#0E4A43] text-white font-bold text-xs hover:brightness-110 shadow-xs"
             >
               + Provision Staff Account
             </button>
           </div>
 
-          <div className="bg-white rounded-[28px] border border-slate-200/80 shadow-xs overflow-hidden text-xs">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead className="bg-[#EFF2F5] text-slate-700 uppercase text-[10px] font-bold border-b border-slate-200">
-                  <tr>
-                    <th className="py-3 px-5">Name &amp; Email</th>
-                    <th className="py-3 px-4">Assigned Role</th>
-                    <th className="py-3 px-4">Assigned Facility / Area</th>
-                    <th className="py-3 px-4">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 font-medium">
-                  {staff.length > 0 ? (
-                    staff.map((s) => (
-                      <tr key={s.id} className="hover:bg-slate-50">
-                        <td className="py-3 px-5 font-black text-slate-900">
-                          <div>{s.fullName}</div>
-                          <div className="text-[11px] text-slate-500 font-normal">{s.email}</div>
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 text-[10px] font-black uppercase">
-                            {s.role}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-slate-700">
-                          {s.facilityAdmin?.facility?.name || s.healthWorker?.villageArea || "District Healthcare Pool"}
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[10px] font-bold">
-                            {s.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={4} className="py-8 text-center text-slate-400">
-                        No staff provisioned yet. Click "+ Provision Staff Account" to add personnel.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
+            <div className="divide-y divide-slate-100">
+              {staff.length === 0 ? (
+                <div className="p-8 text-center text-slate-400 text-xs font-bold">
+                  No staff provisioned yet for {districtName} district. Click Provision Staff Account to add.
+                </div>
+              ) : (
+                staff.map((s) => (
+                  <div key={s.id} className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs">
+                    <div>
+                      <span className="font-black text-sm text-slate-900">{s.fullName}</span>
+                      <p className="text-slate-500">{s.email} &bull; {s.phone || "No phone"}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 font-bold text-[10px] uppercase">
+                        {s.role}
+                      </span>
+                      <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 font-bold text-[10px]">
+                        {s.status}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
       )}
 
-      {/* ─── REFERRALS & BED AUDITS TAB ───────────────────────────────────────── */}
+      {/* ─── REFERRALS AUDIT TAB ─────────────────────────────────────────────── */}
       {activeTab === "referrals_audit" && (
         <div className="space-y-6">
           <div>
-            <h2 className="text-lg font-black text-slate-900">District Inter-Facility Referral &amp; Bed Audit</h2>
-            <p className="text-xs text-slate-500">Track taluka-level patient transfers and prevent bed shortages across the district.</p>
+            <h2 className="text-xl font-black text-slate-900">District Inter-Facility Referral Audits</h2>
+            <p className="text-xs text-slate-500">Real-time monitoring of inter-hospital transfers and critical bed reservations</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-white rounded-[28px] p-6 border border-slate-200/80 shadow-xs space-y-2">
-              <span className="text-[10px] uppercase font-bold text-slate-400">Sub-Centres &rarr; PHC Transfers</span>
-              <div className="text-2xl font-black text-slate-900">42 Referrals</div>
-              <p className="text-xs text-slate-500">100% resolved within district network.</p>
+          {referrals.length === 0 ? (
+            <div className="p-12 text-center bg-white rounded-3xl border border-slate-200/80 space-y-2">
+              <div className="text-2xl">🔄</div>
+              <div className="font-bold text-slate-900 text-base">No Active Referrals in {districtName}</div>
+              <p className="text-xs text-slate-500">Inter-facility transfers escalated by Medical Officers will be audited here.</p>
             </div>
-            <div className="bg-white rounded-[28px] p-6 border border-slate-200/80 shadow-xs space-y-2">
-              <span className="text-[10px] uppercase font-bold text-slate-400">PHC &rarr; District Hospital Transfers</span>
-              <div className="text-2xl font-black text-emerald-700">18 Critical</div>
-              <p className="text-xs text-slate-500">All bed reservations confirmed before transit.</p>
-            </div>
-            <div className="bg-white rounded-[28px] p-6 border border-slate-200/80 shadow-xs space-y-2">
-              <span className="text-[10px] uppercase font-bold text-slate-400">108 Ambulance Response Time</span>
-              <div className="text-2xl font-black text-[#0E4A43]">14.2 Mins</div>
-              <p className="text-xs text-slate-500">Average response across rural talukas.</p>
-            </div>
-          </div>
-        </div>
-      )}
+          ) : (
+            <div className="space-y-4">
+              {referrals.map((ref) => (
+                <div key={ref.id} className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs space-y-3 text-xs">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-blue-100 text-blue-800">
+                        {ref.status}
+                      </span>
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-rose-100 text-rose-800">
+                        {ref.priority}
+                      </span>
+                    </div>
+                    <span className="text-slate-400 font-mono">{new Date(ref.createdAt).toLocaleDateString()}</span>
+                  </div>
 
-      {/* ─── DISTRICT PROFILE TAB ────────────────────────────────────────────── */}
-      {activeTab === "profile" && (
-        <div className="space-y-6 max-w-2xl">
-          <div className="bg-white rounded-[28px] p-6 border border-slate-200/80 shadow-xs space-y-4 text-xs">
-            <h3 className="text-base font-black text-slate-900">District Health Office Jurisdiction</h3>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="p-3.5 bg-[#EFF2F5] rounded-2xl">
-                <span className="text-[10px] text-slate-400 font-bold uppercase block">Officer Name</span>
-                <span className="text-sm font-bold text-slate-900">{user.fullName}</span>
-              </div>
-              <div className="p-3.5 bg-[#EFF2F5] rounded-2xl">
-                <span className="text-[10px] text-slate-400 font-bold uppercase block">Assigned District</span>
-                <span className="text-sm font-bold text-[#0E4A43]">{districtName} District</span>
-              </div>
-              <div className="p-3.5 bg-[#EFF2F5] rounded-2xl">
-                <span className="text-[10px] text-slate-400 font-bold uppercase block">Official Email</span>
-                <span className="text-sm font-bold text-slate-900">{user.email}</span>
-              </div>
-              <div className="p-3.5 bg-[#EFF2F5] rounded-2xl">
-                <span className="text-[10px] text-slate-400 font-bold uppercase block">State Authority</span>
-                <span className="text-sm font-bold text-slate-900">Govt of Maharashtra</span>
-              </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-[#EFF2F5] rounded-2xl">
+                    <div>Origin: <strong className="text-slate-900">{ref.fromFacility?.name}</strong></div>
+                    <div>Target Hospital: <strong className="text-[#0E4A43]">{ref.toFacility?.name}</strong></div>
+                  </div>
+
+                  <div className="text-slate-700">
+                    Reason: <strong className="text-slate-900">{ref.reason}</strong>
+                    {ref.requiredSpecialty && <span className="ml-2">({ref.requiredSpecialty})</span>}
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-1">
+                    {ref.status !== "BED_RESERVED" && ref.status !== "COMPLETED" && (
+                      <button
+                        onClick={() => handleUpdateReferralStatus(ref.id, "BED_RESERVED")}
+                        className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px]"
+                      >
+                        ✓ Confirm Bed Reservation
+                      </button>
+                    )}
+                    {ref.status === "BED_RESERVED" && (
+                      <button
+                        onClick={() => handleUpdateReferralStatus(ref.id, "PATIENT_ARRIVED")}
+                        className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px]"
+                      >
+                        Mark Patient Arrived
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
-          </div>
+          )}
         </div>
       )}
 
       {/* ─── REGISTER FACILITY MODAL ─────────────────────────────────────────── */}
       {showFacModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-[32px] max-w-lg w-full p-6 sm:p-8 space-y-4 shadow-2xl border border-slate-200 animate-in fade-in zoom-in duration-200">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 space-y-4 shadow-2xl border border-slate-200">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-black text-slate-900">Register Healthcare Facility</h3>
               <button onClick={() => setShowFacModal(false)} className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:text-slate-900">✕</button>
             </div>
 
+            {facMsg && (
+              <div className={`p-3 rounded-xl text-xs font-bold ${facMsg.type === "success" ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-800"}`}>
+                {facMsg.text}
+              </div>
+            )}
+
             <form onSubmit={handleRegisterFacility} className="space-y-4 text-xs">
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700">Facility Name *</label>
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Facility Name *</label>
                 <input
                   type="text"
                   required
                   value={facName}
                   onChange={(e) => setFacName(e.target.value)}
                   placeholder="e.g. Primary Health Centre (PHC) Manchar"
-                  className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-bold"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700">Facility Type *</label>
-                  <select value={facType} onChange={(e) => setFacType(e.target.value)} className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900 font-bold">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Facility Type *</label>
+                  <select
+                    value={facType}
+                    onChange={(e) => setFacType(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-bold"
+                  >
                     <option value="SUB_CENTRE">Sub Centre</option>
                     <option value="PHC">PHC</option>
                     <option value="CHC">CHC</option>
@@ -436,31 +454,51 @@ export function DistrictAdminDashboard({ user, activeTab, setTab }: DistrictAdmi
                     <option value="DISTRICT_HOSPITAL">District Hospital</option>
                   </select>
                 </div>
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700">Village / Locality</label>
-                  <input type="text" value={facVillage} onChange={(e) => setFacVillage(e.target.value)} placeholder="e.g. Manchar"
-                    className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900" />
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Village / Taluka</label>
+                  <input
+                    type="text"
+                    value={facVillage}
+                    onChange={(e) => setFacVillage(e.target.value)}
+                    placeholder="e.g. Manchar"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-bold"
+                  />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700">Total Bed Capacity</label>
-                  <input type="number" value={facTotalBeds} onChange={(e) => setFacTotalBeds(Number(e.target.value))}
-                    className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900" />
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Total Beds</label>
+                  <input
+                    type="number"
+                    value={facTotalBeds}
+                    onChange={(e) => setFacTotalBeds(Number(e.target.value))}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-bold"
+                  />
                 </div>
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700">Available Beds</label>
-                  <input type="number" value={facAvailableBeds} onChange={(e) => setFacAvailableBeds(Number(e.target.value))}
-                    className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900" />
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Available Beds</label>
+                  <input
+                    type="number"
+                    value={facAvailableBeds}
+                    onChange={(e) => setFacAvailableBeds(Number(e.target.value))}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-bold"
+                  />
                 </div>
               </div>
 
-              <div className="pt-2 flex items-center justify-end gap-2">
-                <button type="button" onClick={() => setShowFacModal(false)} className="px-4 py-2.5 rounded-full text-slate-600 hover:bg-slate-100 font-bold">
+              <div className="pt-2 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowFacModal(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-bold"
+                >
                   Cancel
                 </button>
-                <button type="submit" className="px-6 py-2.5 rounded-full bg-[#0E4A43] text-white font-black hover:bg-[#083530]">
+                <button
+                  type="submit"
+                  className="px-6 py-2 rounded-xl bg-[#0E4A43] text-white font-bold hover:brightness-110 shadow-md"
+                >
                   Register Facility
                 </button>
               </div>
@@ -471,57 +509,95 @@ export function DistrictAdminDashboard({ user, activeTab, setTab }: DistrictAdmi
 
       {/* ─── PROVISION STAFF MODAL ───────────────────────────────────────────── */}
       {showStaffModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-[32px] max-w-lg w-full p-6 sm:p-8 space-y-4 shadow-2xl border border-slate-200 animate-in fade-in zoom-in duration-200">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 space-y-4 shadow-2xl border border-slate-200">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-black text-slate-900">Provision Staff Account</h3>
+              <h3 className="text-lg font-black text-slate-900">Provision Healthcare Personnel</h3>
               <button onClick={() => setShowStaffModal(false)} className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:text-slate-900">✕</button>
             </div>
 
+            {staffMsg && (
+              <div className={`p-3 rounded-xl text-xs font-bold ${staffMsg.type === "success" ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-800"}`}>
+                {staffMsg.text}
+              </div>
+            )}
+
             <form onSubmit={handleProvisionStaff} className="space-y-4 text-xs">
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700">Role to Assign *</label>
-                <select value={staffRole} onChange={(e) => setStaffRole(e.target.value as any)} className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900 font-bold">
-                  <option value="FACILITY_ADMIN">Facility Admin (Hospital Superintendent)</option>
-                  <option value="DOCTOR">Doctor / Medical Officer</option>
-                  <option value="HEALTH_WORKER">ASHA / ANM Health Worker</option>
-                </select>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Role *</label>
+                  <select
+                    value={staffRole}
+                    onChange={(e) => setStaffRole(e.target.value as any)}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-bold"
+                  >
+                    <option value="FACILITY_ADMIN">Facility Admin</option>
+                    <option value="DOCTOR">Medical Officer / Doctor</option>
+                    <option value="HEALTH_WORKER">ASHA / Frontline Worker</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Assign to Facility</label>
+                  <select
+                    value={staffFacilityId}
+                    onChange={(e) => setStaffFacilityId(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-bold"
+                  >
+                    {facilities.map((fac) => (
+                      <option key={fac.id} value={fac.id}>{fac.name}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700">Full Name *</label>
-                <input type="text" required value={staffFullName} onChange={(e) => setStaffFullName(e.target.value)} placeholder="e.g. Dr. Ananya Kulkarni"
-                  className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900" />
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Full Legal Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={staffFullName}
+                  onChange={(e) => setStaffFullName(e.target.value)}
+                  placeholder="e.g. Dr. Suresh Kulkarni"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-bold"
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700">Official Email *</label>
-                  <input type="email" required value={staffEmail} onChange={(e) => setStaffEmail(e.target.value)} placeholder="doctor@swasthya.gov.in"
-                    className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900" />
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Govt Email *</label>
+                  <input
+                    type="email"
+                    required
+                    value={staffEmail}
+                    onChange={(e) => setStaffEmail(e.target.value)}
+                    placeholder="doctor@swasthya.gov.in"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-bold"
+                  />
                 </div>
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700">Initial Password *</label>
-                  <input type="text" required value={staffPassword} onChange={(e) => setStaffPassword(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900" />
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Initial Password</label>
+                  <input
+                    type="password"
+                    value={staffPassword}
+                    onChange={(e) => setStaffPassword(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-bold"
+                  />
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700">Assigned Facility *</label>
-                <select value={staffFacilityId} onChange={(e) => setStaffFacilityId(e.target.value)} className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900">
-                  {facilities.map((f) => (
-                    <option key={f.id} value={f.id}>{f.name} ({f.district})</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="pt-2 flex items-center justify-end gap-2">
-                <button type="button" onClick={() => setShowStaffModal(false)} className="px-4 py-2.5 rounded-full text-slate-600 hover:bg-slate-100 font-bold">
+              <div className="pt-2 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowStaffModal(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-bold"
+                >
                   Cancel
                 </button>
-                <button type="submit" className="px-6 py-2.5 rounded-full bg-[#0E4A43] text-white font-black hover:bg-[#083530]">
-                  Create Account
+                <button
+                  type="submit"
+                  className="px-6 py-2 rounded-xl bg-[#0E4A43] text-white font-bold hover:brightness-110 shadow-md"
+                >
+                  Provision Account
                 </button>
               </div>
             </form>

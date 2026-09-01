@@ -1,8 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { type UserProfile } from "@/lib/api";
+import {
+  type UserProfile,
+  type TriageAssessment,
+  type MchRecord,
+  type Facility,
+  triageApi,
+  mchApi,
+  facilitiesApi,
+} from "@/lib/api";
 
 interface HealthWorkerDashboardProps {
   user: UserProfile;
@@ -13,442 +21,776 @@ interface HealthWorkerDashboardProps {
 export function HealthWorkerDashboard({ user, activeTab, setTab }: HealthWorkerDashboardProps) {
   const worker = user.healthWorker;
 
-  // Doorstep Triage State
+  // Live Database States
+  const [triageRecords, setTriageRecords] = useState<TriageAssessment[]>([]);
+  const [mchList, setMchList] = useState<MchRecord[]>([]);
+  const [facilities, setFacilities] = useState<Facility[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Doorstep Triage Form State
   const [patientName, setPatientName] = useState("");
   const [patientAge, setPatientAge] = useState("");
-  const [patientGender, setPatientGender] = useState("Female");
+  const [patientGender, setPatientGender] = useState<"MALE" | "FEMALE" | "OTHER">("FEMALE");
   const [bpSystolic, setBpSystolic] = useState("");
   const [bpDiastolic, setBpDiastolic] = useState("");
   const [spo2, setSpo2] = useState("");
   const [temp, setTemp] = useState("");
   const [pulse, setPulse] = useState("");
   const [isPregnant, setIsPregnant] = useState(false);
-  const [hasChestPain, setHasChestPain] = useState(false);
-  const [hasHighFever, setHasHighFever] = useState(false);
-  const [triageOutput, setTriageOutput] = useState<{ priority: string; color: string; advice: string } | null>(null);
+  const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>([]);
+  const [notes, setNotes] = useState("");
+  const [triageSubmitting, setTriageSubmitting] = useState(false);
+  const [triageOutput, setTriageOutput] = useState<{ priority: string; advice: string } | null>(null);
 
-  // Triage Records
-  const [triageRecords, setTriageRecords] = useState([
-    {
-      id: "TRG-101",
-      patient: "Laxmi Dilip Jadhav",
-      age: 24,
-      village: "Ambegaon Gav",
-      priority: "CRITICAL",
-      vitals: "BP: 160/105 (High) | SpO2: 96%",
-      notes: "ANC 3rd Trimester - High blood pressure / pre-eclampsia signs",
-      action: "Assisted Tele-OPD Initiated",
-    },
-    {
-      id: "TRG-102",
-      patient: "Ganesh Vishnu Kale",
-      age: 58,
-      village: "Ambegaon Wasti",
-      priority: "MODERATE",
-      vitals: "BP: 138/88 | Random Sugar: 210 mg/dL",
-      notes: "Uncontrolled diabetes review required",
-      action: "Referred to PHC Manchar",
-    },
-  ]);
+  // MCH Add Modal State
+  const [showAddMchModal, setShowAddMchModal] = useState(false);
+  const [mchMotherName, setMchMotherName] = useState("");
+  const [mchAge, setMchAge] = useState("");
+  const [mchVillage, setMchVillage] = useState(worker?.villageArea || "Ambegaon");
+  const [mchEdd, setMchEdd] = useState("");
+  const [mchTrimester, setMchTrimester] = useState("1st Trimester");
+  const [mchRiskLevel, setMchRiskLevel] = useState<"NORMAL" | "HIGH_RISK">("NORMAL");
+  const [mchAncCount, setMchAncCount] = useState(1);
+  const [mchHb, setMchHb] = useState("");
+  const [mchIfa, setMchIfa] = useState(true);
+  const [mchNotes, setMchNotes] = useState("");
+  const [mchSubmitting, setMchSubmitting] = useState(false);
 
-  // Maternal & Child Health Tracker State
-  const [mchList, setMchList] = useState([
-    {
-      id: "MCH-01",
-      motherName: "Pooja Santosh Gaikwad",
-      age: 22,
-      edd: "15 Oct 2026",
-      trimester: "3rd Trimester",
-      riskLevel: "HIGH RISK",
-      ancCount: "3 of 4 Completed",
-      hb: "9.2 g/dL (Mild Anemia)",
-      ifaGiven: "Yes (100 tablets)",
-    },
-    {
-      id: "MCH-02",
-      motherName: "Rohini Balu More",
-      age: 27,
-      edd: "22 Dec 2026",
-      trimester: "2nd Trimester",
-      riskLevel: "NORMAL",
-      ancCount: "2 of 4 Completed",
-      hb: "11.8 g/dL (Normal)",
-      ifaGiven: "Yes (100 tablets)",
-    },
-  ]);
+  const loadHealthWorkerData = async () => {
+    setLoading(true);
+    try {
+      const [triageRes, mchRes, facRes] = await Promise.allSettled([
+        triageApi.list(),
+        mchApi.list(),
+        facilitiesApi.list(),
+      ]);
 
-  const handleRunTriage = (e: React.FormEvent) => {
-    e.preventDefault();
-    const sys = Number(bpSystolic);
-    const sp = Number(spo2);
-    const tp = Number(temp);
-
-    let priority = "ROUTINE";
-    let color = "bg-emerald-100 text-emerald-800 border-emerald-200";
-    let advice = "Vitals stable. Schedule routine checkup at Sub-Centre.";
-
-    if (hasChestPain || sp < 92 || sys >= 160) {
-      priority = "CRITICAL EMERGENCY";
-      color = "bg-rose-100 text-rose-800 border-rose-200";
-      advice = "Immediate referral required! Call 108 ambulance and start emergency protocol.";
-    } else if (hasHighFever || tp >= 102 || sys >= 140 || sp < 95 || isPregnant) {
-      priority = "MODERATE PRIORITY";
-      color = "bg-amber-100 text-amber-900 border-amber-200";
-      advice = "Connect with Medical Officer via Assisted Tele-OPD within 2 hours.";
+      if (triageRes.status === "fulfilled" && triageRes.value.success) {
+        setTriageRecords(triageRes.value.data);
+      }
+      if (mchRes.status === "fulfilled" && mchRes.value.success) {
+        setMchList(mchRes.value.data);
+      }
+      if (facRes.status === "fulfilled" && facRes.value.success) {
+        setFacilities(facRes.value.data.facilities);
+      }
+    } catch (err) {
+      console.error("Failed to load health worker data:", err);
+    } finally {
+      setLoading(false);
     }
+  };
 
-    const res = { priority, color, advice };
-    setTriageOutput(res);
+  useEffect(() => {
+    loadHealthWorkerData();
+  }, [worker?.id]);
 
-    const newRecord = {
-      id: `TRG-${Math.floor(100 + Math.random() * 900)}`,
-      patient: patientName,
-      age: Number(patientAge) || 30,
-      village: worker?.villageArea || "Ambegaon",
-      priority: priority.includes("CRITICAL") ? "CRITICAL" : priority.includes("MODERATE") ? "MODERATE" : "ROUTINE",
-      vitals: `BP: ${bpSystolic}/${bpDiastolic || "80"} | SpO2: ${spo2}%`,
-      notes: advice,
-      action: priority.includes("CRITICAL") ? "108 Escalation" : "Tele-OPD Scheduled",
-    };
-    setTriageRecords([newRecord, ...triageRecords]);
+  const handleRunTriage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!patientName.trim()) return;
+    setTriageSubmitting(true);
+    try {
+      const res = await triageApi.create({
+        patientName,
+        patientAge: patientAge ? Number(patientAge) : undefined,
+        patientGender,
+        village: worker?.villageArea || "Village",
+        facilityId: worker?.facilityId || worker?.facility?.id || undefined,
+        bpSystolic: bpSystolic ? Number(bpSystolic) : undefined,
+        bpDiastolic: bpDiastolic ? Number(bpDiastolic) : undefined,
+        spo2: spo2 ? Number(spo2) : undefined,
+        temperature: temp ? Number(temp) : undefined,
+        pulse: pulse ? Number(pulse) : undefined,
+        symptoms: selectedSymptoms,
+        isPregnant,
+        notes,
+      });
+
+      setTriageOutput({
+        priority: res.data.priority,
+        advice: res.data.actionTaken || "Vitals recorded and synced with PHC database.",
+      });
+
+      await loadHealthWorkerData();
+      setTimeout(() => {
+        setPatientName("");
+        setPatientAge("");
+        setBpSystolic("");
+        setBpDiastolic("");
+        setSpo2("");
+        setTemp("");
+        setPulse("");
+        setIsPregnant(false);
+        setSelectedSymptoms([]);
+        setNotes("");
+      }, 1500);
+    } catch (err: any) {
+      alert(err.message || "Failed to submit triage assessment.");
+    } finally {
+      setTriageSubmitting(false);
+    }
+  };
+
+  const handleCreateMch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!mchMotherName.trim()) return;
+    setMchSubmitting(true);
+    try {
+      await mchApi.create({
+        healthWorkerId: worker?.id || undefined,
+        facilityId: worker?.facilityId || worker?.facility?.id || undefined,
+        motherName: mchMotherName,
+        age: mchAge ? Number(mchAge) : undefined,
+        village: mchVillage,
+        edd: mchEdd || undefined,
+        trimester: mchTrimester,
+        riskLevel: mchRiskLevel,
+        ancCount: Number(mchAncCount),
+        hemoglobin: mchHb ? Number(mchHb) : undefined,
+        ifaDelivered: mchIfa,
+        notes: mchNotes,
+      });
+
+      await loadHealthWorkerData();
+      setShowAddMchModal(false);
+      setMchMotherName("");
+      setMchAge("");
+      setMchEdd("");
+      setMchHb("");
+      setMchNotes("");
+    } catch (err: any) {
+      alert(err.message || "Failed to save MCH record.");
+    } finally {
+      setMchSubmitting(false);
+    }
+  };
+
+  const handleDeleteTriage = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this triage log?")) return;
+    try {
+      await triageApi.delete(id);
+      await loadHealthWorkerData();
+    } catch (err: any) {
+      alert(err.message || "Failed to delete triage log.");
+    }
+  };
+
+  const handleDeleteMch = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this MCH record?")) return;
+    try {
+      await mchApi.delete(id);
+      await loadHealthWorkerData();
+    } catch (err: any) {
+      alert(err.message || "Failed to delete MCH record.");
+    }
+  };
+
+  const toggleSymptom = (s: string) => {
+    if (selectedSymptoms.includes(s)) {
+      setSelectedSymptoms(selectedSymptoms.filter((item) => item !== s));
+    } else {
+      setSelectedSymptoms([...selectedSymptoms, s]);
+    }
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 max-w-6xl">
       {/* ─── FRONTLINE OVERVIEW TAB ──────────────────────────────────────────── */}
       {activeTab === "overview" && (
-        <div className="space-y-6">
-          {/* Welcome Banner */}
-          <div className="bg-[#0E4A43] text-white rounded-[32px] p-6 sm:p-8 relative overflow-hidden shadow-xs">
-            <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-              <div className="space-y-2 max-w-xl">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#E5F973]/20 border border-[#E5F973]/30 text-[#E5F973] text-xs font-bold">
+        <div className="space-y-8">
+          {/* Header Banner */}
+          <div className="rounded-3xl bg-linear-to-br from-[#0E4A43] via-[#093530] to-[#041c19] p-8 text-white shadow-xl relative overflow-hidden">
+            <div className="absolute right-0 top-0 w-96 h-96 bg-[#E5F973]/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="space-y-2">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-[#E5F973] text-xs font-bold uppercase tracking-wider">
                   <span className="w-2 h-2 rounded-full bg-[#E5F973] animate-pulse" />
-                  ASHA / ANM Frontline Health Desk
+                  National Health Mission (NHM) &bull; Frontline Health Worker Desk
                 </div>
-                <h2 className="text-2xl sm:text-3xl font-black font-heading">
-                  Namaste, {user.fullName}
-                </h2>
-                <p className="text-xs sm:text-sm text-emerald-100/90 leading-relaxed">
-                  Assigned Village: <span className="font-bold text-[#E5F973]">{worker?.villageArea || "Ambegaon Catchment"}</span> • Linked PHC: Manchar Primary Health Centre
+                <h1 className="text-2xl sm:text-3xl font-black">{user.fullName}</h1>
+                <p className="text-slate-300 text-xs sm:text-sm max-w-xl">
+                  {worker?.workerType || "ASHA Worker"} • Village Jurisdiction: <strong className="text-white">{worker?.villageArea || "Rural Sub-Centre"}</strong>
                 </p>
-
-                <div className="pt-2 flex flex-wrap gap-2.5">
-                  <button
-                    onClick={() => setTab("triage")}
-                    className="px-5 py-2.5 rounded-full bg-[#E5F973] text-slate-950 text-xs font-black hover:bg-[#d8ec68] transition-all shadow-xs flex items-center gap-1.5 active:scale-95"
-                  >
-                    + Start Doorstep Clinical Triage
-                  </button>
-                  <button
-                    onClick={() => setTab("teleopd")}
-                    className="px-5 py-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all border border-white/20"
-                  >
-                    Launch Kiosk Tele-OPD
-                  </button>
+                <div className="text-xs text-slate-300">
+                  Affiliated PHC: <strong className="text-white">{worker?.facility?.name || "Primary Health Centre"}</strong>
                 </div>
               </div>
-
-              {/* Village Quick Stats */}
-              <div className="bg-white/10 backdrop-blur-md rounded-2xl p-5 border border-white/15 w-full lg:w-72 space-y-2 flex-shrink-0 text-xs">
-                <span className="text-[10px] font-bold uppercase text-emerald-200 block">Village Health Status</span>
-                <div className="flex justify-between py-1 border-b border-white/10">
-                  <span className="text-emerald-100">Covered Households:</span>
-                  <span className="font-bold text-white">184 Families</span>
-                </div>
-                <div className="flex justify-between py-1 border-b border-white/10">
-                  <span className="text-emerald-100">Pregnant Women (ANC):</span>
-                  <span className="font-bold text-[#E5F973]">{mchList.length} Active</span>
-                </div>
-                <div className="flex justify-between py-1">
-                  <span className="text-emerald-100">Child Immunizations Due:</span>
-                  <span className="font-bold text-white">6 Due this week</span>
-                </div>
+              <div className="flex flex-col sm:flex-row items-center gap-3">
+                <button
+                  onClick={() => setTab("triage")}
+                  className="px-5 py-3 rounded-2xl bg-[#E5F973] text-[#0E4A43] font-black text-xs hover:brightness-105 active:scale-95 transition-all shadow-md flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+                  </svg>
+                  New Doorstep Triage
+                </button>
               </div>
             </div>
           </div>
 
-          {/* Metrics Grid */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-[#EFF2F5] rounded-[24px] p-5 border border-slate-200/50">
+          {/* Quick Metrics */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div
+              onClick={() => setTab("triage")}
+              className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs hover:border-[#0E4A43]/40 cursor-pointer transition-all space-y-2 group"
+            >
+              <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-800 flex items-center justify-center font-black group-hover:scale-110 transition-transform">
+                🩺
+              </div>
               <div className="text-2xl font-black text-slate-900">{triageRecords.length}</div>
-              <div className="text-xs font-bold text-slate-700 mt-1">Triaged This Week</div>
-              <div className="text-[10px] text-slate-500">Doorstep vitals logged</div>
+              <div className="text-xs font-bold text-slate-500">Triaged Villagers</div>
             </div>
-            <div className="bg-[#EFF2F5] rounded-[24px] p-5 border border-slate-200/50">
-              <div className="text-2xl font-black text-rose-700">1</div>
-              <div className="text-xs font-bold text-slate-700 mt-1">High-Risk ANC</div>
-              <div className="text-[10px] text-slate-500">Specialist tracking</div>
+            <div
+              onClick={() => setTab("mch")}
+              className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs hover:border-[#0E4A43]/40 cursor-pointer transition-all space-y-2 group"
+            >
+              <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-800 flex items-center justify-center font-black group-hover:scale-110 transition-transform">
+                🤰
+              </div>
+              <div className="text-2xl font-black text-slate-900">{mchList.length}</div>
+              <div className="text-xs font-bold text-slate-500">MCH / ANC Tracked</div>
             </div>
-            <div className="bg-[#EFF2F5] rounded-[24px] p-5 border border-slate-200/50">
-              <div className="text-2xl font-black text-emerald-700">8</div>
-              <div className="text-xs font-bold text-slate-700 mt-1">Tele-OPD Consults</div>
-              <div className="text-[10px] text-slate-500">Connected with MO</div>
+            <div
+              onClick={() => setTab("tele_kiosk")}
+              className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs hover:border-[#0E4A43]/40 cursor-pointer transition-all space-y-2 group"
+            >
+              <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-800 flex items-center justify-center font-black group-hover:scale-110 transition-transform">
+                📹
+              </div>
+              <div className="text-2xl font-black text-slate-900">{facilities.length}</div>
+              <div className="text-xs font-bold text-slate-500">Network Facilities</div>
             </div>
-            <div className="bg-[#EFF2F5] rounded-[24px] p-5 border border-slate-200/50">
-              <div className="text-2xl font-black text-[#0E4A43]">100%</div>
-              <div className="text-xs font-bold text-slate-700 mt-1">IFA Supplement Stock</div>
-              <div className="text-[10px] text-slate-500">Available at Sub-Centre</div>
+            <div
+              onClick={() => setTab("escalation")}
+              className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs hover:border-[#0E4A43]/40 cursor-pointer transition-all space-y-2 group"
+            >
+              <div className="w-10 h-10 rounded-2xl bg-rose-50 text-rose-800 flex items-center justify-center font-black group-hover:scale-110 transition-transform">
+                🚨
+              </div>
+              <div className="text-2xl font-black text-slate-900">
+                {triageRecords.filter((t) => t.priority === "CRITICAL").length}
+              </div>
+              <div className="text-xs font-bold text-slate-500">108 Emergencies</div>
             </div>
           </div>
 
-          {/* Recent Triage Logs */}
-          <div className="bg-white rounded-[28px] p-6 border border-slate-200/80 shadow-xs space-y-4">
+          {/* Recent Doorstep Assessments */}
+          <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-base font-black text-slate-900">Recent Village Triage Records</h3>
-                <p className="text-xs text-slate-500">Real-time health records assessed during village visits.</p>
+                <h2 className="text-lg font-black text-slate-900">Recent Village Triage Records</h2>
+                <p className="text-xs text-slate-500">Clinical assessments and doorstep triage history</p>
               </div>
-              <button onClick={() => setTab("triage")} className="text-xs text-[#0E4A43] font-bold hover:underline">
-                New Triage Form &rsaquo;
+              <button onClick={() => setTab("triage")} className="text-xs font-black text-[#0E4A43] hover:underline">
+                View All Triage Records
               </button>
             </div>
 
-            <div className="divide-y divide-slate-100 border border-slate-100 rounded-2xl overflow-hidden text-xs">
-              {triageRecords.map((rec) => (
-                <div key={rec.id} className="p-4 bg-white hover:bg-slate-50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 transition-colors">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-slate-900 text-sm">{rec.patient}</span>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                        rec.priority === "CRITICAL" ? "bg-rose-100 text-rose-800" : "bg-amber-100 text-amber-900"
-                      }`}>
-                        {rec.priority}
-                      </span>
+            {loading ? (
+              <div className="p-8 text-center bg-white rounded-3xl border border-slate-200/80 text-sm text-slate-500 font-bold">
+                Loading triage data from database...
+              </div>
+            ) : triageRecords.length === 0 ? (
+              <div className="p-8 text-center bg-white rounded-3xl border border-slate-200/80 space-y-2">
+                <div className="text-2xl">🩺</div>
+                <div className="font-bold text-slate-900 text-sm">No Triage Records Yet</div>
+                <p className="text-xs text-slate-500">Record your first doorstep patient assessment to sync with PHC.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {triageRecords.slice(0, 3).map((trg) => (
+                  <div
+                    key={trg.id}
+                    className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                          trg.priority === "CRITICAL"
+                            ? "bg-rose-100 text-rose-800"
+                            : trg.priority === "MODERATE"
+                            ? "bg-amber-100 text-amber-800"
+                            : "bg-emerald-100 text-emerald-800"
+                        }`}>
+                          {trg.priority}
+                        </span>
+                        <span className="text-xs font-bold text-slate-400 font-mono">
+                          {new Date(trg.createdAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <h3 className="font-black text-slate-900 text-sm">{trg.patientName}</h3>
+                      <p className="text-xs text-slate-500">
+                        Age: {trg.patientAge || "N/A"} &bull; BP: {trg.bpSystolic || "-"}/{trg.bpDiastolic || "-"} &bull; SpO2: {trg.spo2 ? `${trg.spo2}%` : "-"}
+                      </p>
+                      {trg.actionTaken && <p className="text-xs text-slate-700 font-medium">{trg.actionTaken}</p>}
                     </div>
-                    <p className="text-slate-600 mt-0.5">{rec.vitals} • {rec.notes}</p>
+
+                    <button
+                      onClick={() => handleDeleteTriage(trg.id)}
+                      className="px-3 py-1.5 rounded-xl border border-slate-200 text-slate-500 hover:text-red-600 hover:bg-red-50 text-xs font-bold self-start sm:self-center"
+                    >
+                      Delete
+                    </button>
                   </div>
-                  <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-800 font-bold self-start sm:self-auto">
-                    {rec.action}
-                  </span>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* ─── DOORSTEP TRIAGE TAB ─────────────────────────────────────────────── */}
+      {/* ─── DOORSTEP CLINICAL TRIAGE TAB ────────────────────────────────────── */}
       {activeTab === "triage" && (
-        <div className="space-y-6 max-w-2xl">
+        <div className="bg-white rounded-3xl p-8 border border-slate-200/80 shadow-xs space-y-6">
           <div>
-            <h2 className="text-lg font-black text-slate-900">Doorstep Clinical Symptom Triage</h2>
-            <p className="text-xs text-slate-500">Record patient vitals to automatically determine clinical urgency level and action protocol.</p>
+            <h2 className="text-xl font-black text-slate-900">Doorstep Clinical Vitals &amp; Triage Assessment</h2>
+            <p className="text-xs text-slate-500">Auto-evaluates clinical urgency and transmits records to Medical Officers</p>
           </div>
 
           {triageOutput && (
-            <div className={`p-5 rounded-2xl border text-xs space-y-1.5 animate-in fade-in duration-200 ${triageOutput.color}`}>
-              <div className="flex items-center justify-between">
-                <span className="font-black text-sm uppercase">Triage Result: {triageOutput.priority}</span>
-                <span className="font-bold px-2 py-0.5 rounded-full bg-white/60">Automated Protocol</span>
-              </div>
-              <p className="font-medium">{triageOutput.advice}</p>
+            <div className={`p-4 rounded-2xl border text-xs font-bold space-y-1 ${
+              triageOutput.priority === "CRITICAL"
+                ? "bg-rose-50 text-rose-800 border-rose-200"
+                : triageOutput.priority === "MODERATE"
+                ? "bg-amber-50 text-amber-800 border-amber-200"
+                : "bg-emerald-50 text-emerald-800 border-emerald-200"
+            }`}>
+              <div className="font-black uppercase tracking-wider">Priority: {triageOutput.priority}</div>
+              <div>{triageOutput.advice}</div>
             </div>
           )}
 
-          <form onSubmit={handleRunTriage} className="bg-white rounded-[28px] p-6 border border-slate-200/80 shadow-xs space-y-4 text-xs">
-            <div className="grid grid-cols-3 gap-3">
-              <div className="col-span-2 space-y-1">
-                <label className="font-bold text-slate-700">Patient Full Name *</label>
+          <form onSubmit={handleRunTriage} className="space-y-5 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Patient Full Name</label>
                 <input
                   type="text"
-                  required
+                  placeholder="e.g. Laxmi Jadhav"
                   value={patientName}
                   onChange={(e) => setPatientName(e.target.value)}
-                  placeholder="e.g. Laxmi Jadhav"
-                  className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900"
+                  required
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-[#0E4A43] font-bold text-xs"
                 />
               </div>
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700">Age</label>
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Age</label>
                 <input
                   type="number"
-                  required
+                  placeholder="e.g. 32"
                   value={patientAge}
                   onChange={(e) => setPatientAge(e.target.value)}
-                  placeholder="24"
-                  className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-[#0E4A43] font-bold text-xs"
                 />
               </div>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700">BP Systolic</label>
-                <input type="number" value={bpSystolic} onChange={(e) => setBpSystolic(e.target.value)} placeholder="120"
-                  className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900" />
-              </div>
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700">BP Diastolic</label>
-                <input type="number" value={bpDiastolic} onChange={(e) => setBpDiastolic(e.target.value)} placeholder="80"
-                  className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900" />
-              </div>
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700">SpO2 Oxygen %</label>
-                <input type="number" value={spo2} onChange={(e) => setSpo2(e.target.value)} placeholder="98"
-                  className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900" />
-              </div>
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700">Temperature (°F)</label>
-                <input type="text" value={temp} onChange={(e) => setTemp(e.target.value)} placeholder="98.6"
-                  className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900" />
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Gender</label>
+                <select
+                  value={patientGender}
+                  onChange={(e) => setPatientGender(e.target.value as any)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-[#0E4A43] font-bold bg-white text-xs"
+                >
+                  <option value="FEMALE">Female</option>
+                  <option value="MALE">Male</option>
+                  <option value="OTHER">Other</option>
+                </select>
               </div>
             </div>
 
-            <div className="p-3 bg-[#EFF2F5] rounded-2xl space-y-2">
-              <span className="font-bold text-slate-800 block">Red-Flag Symptoms:</span>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <label className="flex items-center gap-2 cursor-pointer font-medium text-slate-700">
-                  <input type="checkbox" checked={hasChestPain} onChange={(e) => setHasChestPain(e.target.checked)} className="rounded text-[#0E4A43]" />
-                  Severe Chest Pain / Shortness of Breath
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer font-medium text-slate-700">
-                  <input type="checkbox" checked={isPregnant} onChange={(e) => setIsPregnant(e.target.checked)} className="rounded text-[#0E4A43]" />
-                  Pregnant ANC (Swelling / Blurred Vision)
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer font-medium text-slate-700">
-                  <input type="checkbox" checked={hasHighFever} onChange={(e) => setHasHighFever(e.target.checked)} className="rounded text-[#0E4A43]" />
-                  High Fever with Chills (&gt; 3 Days)
-                </label>
+            {/* Vitals Grid */}
+            <div>
+              <label className="block font-bold text-slate-700 mb-2">Clinical Vitals</label>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500">BP Systolic</label>
+                  <input
+                    type="number"
+                    placeholder="120"
+                    value={bpSystolic}
+                    onChange={(e) => setBpSystolic(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 font-bold text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500">BP Diastolic</label>
+                  <input
+                    type="number"
+                    placeholder="80"
+                    value={bpDiastolic}
+                    onChange={(e) => setBpDiastolic(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 font-bold text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500">SpO2 (%)</label>
+                  <input
+                    type="number"
+                    placeholder="98"
+                    value={spo2}
+                    onChange={(e) => setSpo2(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 font-bold text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500">Temp (°F)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    placeholder="98.6"
+                    value={temp}
+                    onChange={(e) => setTemp(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 font-bold text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500">Pulse (bpm)</label>
+                  <input
+                    type="number"
+                    placeholder="75"
+                    value={pulse}
+                    onChange={(e) => setPulse(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 font-bold text-xs"
+                  />
+                </div>
               </div>
             </div>
 
-            <button
-              type="submit"
-              className="w-full py-3 rounded-full bg-[#0E4A43] text-white font-black hover:bg-[#083530] transition-all shadow-xs"
-            >
-              Evaluate Triage &amp; Calculate Urgency Protocol
-            </button>
+            {/* Red Flags & Symptoms */}
+            <div>
+              <label className="block font-bold text-slate-700 mb-2">Red Flags &amp; Symptoms</label>
+              <div className="flex flex-wrap gap-2">
+                {["Severe Chest Pain", "High Fever (>102°F)", "Severe Breathlessness", "Persistent Vomiting", "Abdominal Pain", "Dizziness / Fainting"].map((symp) => (
+                  <button
+                    key={symp}
+                    type="button"
+                    onClick={() => toggleSymptom(symp)}
+                    className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-colors ${
+                      selectedSymptoms.includes(symp)
+                        ? "bg-[#0E4A43] text-white border-[#0E4A43]"
+                        : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                    }`}
+                  >
+                    {selectedSymptoms.includes(symp) ? "✓ " : "+ "}{symp}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 pt-1">
+              <input
+                type="checkbox"
+                id="preg"
+                checked={isPregnant}
+                onChange={(e) => setIsPregnant(e.target.checked)}
+                className="w-4 h-4 accent-[#0E4A43] rounded"
+              />
+              <label htmlFor="preg" className="font-bold text-slate-700 cursor-pointer">
+                Pregnant Woman (Antenatal Care / High-Risk Pregnancy Assessment)
+              </label>
+            </div>
+
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Clinical Observation Notes</label>
+              <textarea
+                rows={2}
+                placeholder="Document any additional observations, medicine allergies, or village conditions..."
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-[#0E4A43] font-medium text-xs"
+              />
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                type="submit"
+                disabled={triageSubmitting}
+                className="px-6 py-3 rounded-2xl bg-[#0E4A43] text-white font-black text-xs hover:brightness-110 disabled:opacity-50 transition-all shadow-md"
+              >
+                {triageSubmitting ? "Evaluating & Transmitting..." : "Evaluate & Transmit Triage Record"}
+              </button>
+            </div>
           </form>
         </div>
       )}
 
-      {/* ─── ASSISTED TELE-OPD TAB ───────────────────────────────────────────── */}
-      {activeTab === "teleopd" && (
-        <div className="space-y-6 max-w-2xl">
-          <div>
-            <h2 className="text-lg font-black text-slate-900">Sub-Centre Kiosk Tele-OPD</h2>
-            <p className="text-xs text-slate-500">Connect village patients with on-duty government medical officers via live video consult.</p>
+      {/* ─── MATERNAL & CHILD HEALTH (MCH) TAB ───────────────────────────────── */}
+      {activeTab === "mch" && (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-black text-slate-900">Maternal &amp; Child Health (MCH) Register</h2>
+              <p className="text-xs text-slate-500">Antenatal care (ANC), high-risk pregnancy tracking, and IFA supplement delivery</p>
+            </div>
+            <button
+              onClick={() => setShowAddMchModal(true)}
+              className="px-4 py-2.5 rounded-xl bg-[#0E4A43] text-white font-bold text-xs hover:brightness-110 shadow-xs"
+            >
+              + Add Pregnant Mother (ANC)
+            </button>
           </div>
 
-          <div className="bg-white rounded-[28px] p-6 border border-slate-200/80 shadow-xs space-y-4 text-xs">
-            <div className="p-4 bg-emerald-50 text-emerald-900 border border-emerald-200 rounded-2xl flex items-center justify-between">
-              <div>
-                <span className="font-black text-sm block">Sub-Centre Kiosk Online</span>
-                <span className="text-[11px] text-emerald-800">4 Medical Officers currently on duty in district pool.</span>
+          {loading ? (
+            <div className="p-8 text-center bg-white rounded-3xl border border-slate-200/80 text-sm text-slate-500 font-bold">
+              Loading MCH records from database...
+            </div>
+          ) : mchList.length === 0 ? (
+            <div className="p-12 text-center bg-white rounded-3xl border border-slate-200/80 space-y-2">
+              <div className="text-2xl">🤰</div>
+              <div className="font-bold text-slate-900 text-base">No MCH Records Registered</div>
+              <p className="text-xs text-slate-500">Click Add Pregnant Mother to log an antenatal tracking entry.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {mchList.map((mch) => (
+                <div key={mch.id} className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="font-black text-base text-slate-900">{mch.motherName}</span>
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                      mch.riskLevel === "HIGH_RISK" ? "bg-rose-100 text-rose-800" : "bg-emerald-100 text-emerald-800"
+                    }`}>
+                      {mch.riskLevel === "HIGH_RISK" ? "High-Risk Pregnancy" : "Normal Progress"}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 p-3 bg-[#EFF2F5] rounded-xl text-xs">
+                    <div>Age: <strong className="text-slate-900">{mch.age || "N/A"} yrs</strong></div>
+                    <div>Village: <strong className="text-slate-900">{mch.village || "Ambegaon"}</strong></div>
+                    <div>Trimester: <strong className="text-slate-900">{mch.trimester}</strong></div>
+                    <div>EDD: <strong className="text-[#0E4A43]">{mch.edd ? new Date(mch.edd).toLocaleDateString() : "Pending"}</strong></div>
+                  </div>
+
+                  <div className="text-xs space-y-1 text-slate-700">
+                    <div>ANC Visits Completed: <strong className="text-slate-900">{mch.ancCount} of 4</strong></div>
+                    <div>Hemoglobin: <strong className="text-slate-900">{mch.hemoglobin ? `${mch.hemoglobin} g/dL` : "Pending Lab"}</strong></div>
+                    <div>IFA Supplements: <strong className="text-slate-900">{mch.ifaDelivered ? "Delivered (100 Tablets)" : "Pending Delivery"}</strong></div>
+                    {mch.notes && <div className="pt-1 text-slate-500 italic">{mch.notes}</div>}
+                  </div>
+
+                  <div className="flex justify-end pt-1">
+                    <button
+                      onClick={() => handleDeleteMch(mch.id)}
+                      className="text-xs font-bold text-red-600 hover:underline"
+                    >
+                      Remove Entry
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Add MCH Modal */}
+          {showAddMchModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+              <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-black text-lg text-slate-900">Add Pregnant Mother (ANC Tracker)</h3>
+                  <button
+                    onClick={() => setShowAddMchModal(false)}
+                    className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center font-bold"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <form onSubmit={handleCreateMch} className="space-y-4 text-xs">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Mother Full Name</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Rohini Balu More"
+                      value={mchMotherName}
+                      onChange={(e) => setMchMotherName(e.target.value)}
+                      required
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-[#0E4A43] font-bold text-xs"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Age</label>
+                      <input
+                        type="number"
+                        placeholder="e.g. 24"
+                        value={mchAge}
+                        onChange={(e) => setMchAge(e.target.value)}
+                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-[#0E4A43] font-bold text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Expected Delivery (EDD)</label>
+                      <input
+                        type="date"
+                        value={mchEdd}
+                        onChange={(e) => setMchEdd(e.target.value)}
+                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-[#0E4A43] font-bold text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Trimester</label>
+                      <select
+                        value={mchTrimester}
+                        onChange={(e) => setMchTrimester(e.target.value)}
+                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-[#0E4A43] font-bold bg-white text-xs"
+                      >
+                        <option value="1st Trimester">1st Trimester</option>
+                        <option value="2nd Trimester">2nd Trimester</option>
+                        <option value="3rd Trimester">3rd Trimester</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Risk Classification</label>
+                      <select
+                        value={mchRiskLevel}
+                        onChange={(e) => setMchRiskLevel(e.target.value as any)}
+                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-[#0E4A43] font-bold bg-white text-xs"
+                      >
+                        <option value="NORMAL">Normal</option>
+                        <option value="HIGH_RISK">High Risk (Pre-eclampsia/Anemia)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">ANC Checkups Done</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="4"
+                        value={mchAncCount}
+                        onChange={(e) => setMchAncCount(Number(e.target.value))}
+                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-[#0E4A43] font-bold text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Hemoglobin (g/dL)</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        placeholder="e.g. 11.5"
+                        value={mchHb}
+                        onChange={(e) => setMchHb(e.target.value)}
+                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-[#0E4A43] font-bold text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-1">
+                    <input
+                      type="checkbox"
+                      id="ifaCheck"
+                      checked={mchIfa}
+                      onChange={(e) => setMchIfa(e.target.checked)}
+                      className="w-4 h-4 accent-[#0E4A43] rounded"
+                    />
+                    <label htmlFor="ifaCheck" className="font-bold text-slate-700 cursor-pointer">
+                      Iron &amp; Folic Acid (IFA) 100 Tablets Delivered
+                    </label>
+                  </div>
+
+                  <div className="pt-2 flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddMchModal(false)}
+                      className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-bold hover:bg-slate-200"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={mchSubmitting}
+                      className="px-6 py-2 rounded-xl bg-[#0E4A43] text-white font-bold hover:brightness-110 disabled:opacity-50 shadow-md"
+                    >
+                      {mchSubmitting ? "Saving..." : "Save MCH Record"}
+                    </button>
+                  </div>
+                </form>
               </div>
-              <span className="w-3 h-3 rounded-full bg-emerald-500 animate-ping" />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── ASSISTED TELE-OPD KIOSK TAB ─────────────────────────────────────── */}
+      {activeTab === "tele_kiosk" && (
+        <div className="bg-white rounded-3xl p-8 border border-slate-200/80 shadow-xs space-y-6">
+          <div>
+            <h2 className="text-xl font-black text-slate-900">Sub-Centre Assisted Tele-OPD Kiosk</h2>
+            <p className="text-xs text-slate-500">Connect rural patients with Medical Officers at CHC/District Hospital via Marathi/Hindi video stream</p>
+          </div>
+
+          <div className="p-6 bg-[#EFF2F5] rounded-3xl border border-slate-200/80 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="font-black text-slate-900 text-base">Village Kiosk Console &bull; {worker?.villageArea || "Ambegaon"}</span>
+                <p className="text-xs text-slate-500">Digital health terminal connected to Maharashtra Health Cloud</p>
+              </div>
+              <span className="px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full font-bold text-xs">
+                KIOSK ONLINE
+              </span>
             </div>
 
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700">Patient Full Name / ABHA ID</label>
-                <input type="text" placeholder="Enter patient name..." className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900" />
-              </div>
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700">Preferred Language</label>
-                <select className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900 font-bold">
-                  <option>Marathi (मराठी)</option>
-                  <option>Hindi (हिन्दी)</option>
-                  <option>English</option>
-                </select>
-              </div>
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700">Presenting Symptoms for Doctor</label>
-                <textarea rows={2} placeholder="Notes for doctor (e.g. chronic cough, joint swelling)..." className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900 resize-none" />
-              </div>
-
-              <button
-                type="button"
-                onClick={() => alert("Launching Assisted Tele-OPD Video session in Marathi with on-duty MO...")}
-                className="w-full py-3 rounded-full bg-[#0E4A43] text-white font-black hover:bg-[#083530] transition-all shadow-xs"
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Link
+                href="/facilities"
+                className="p-4 rounded-2xl bg-white border border-slate-200 hover:border-[#0E4A43] transition-colors space-y-2 block"
               >
-                Connect Live Video Call with Doctor
+                <div className="text-2xl">🏥</div>
+                <div className="font-black text-slate-900 text-sm">Nearby PHC &amp; Bed Registry</div>
+                <p className="text-xs text-slate-500">Check live bed vacancies and medicine stock in the district</p>
+              </Link>
+              <button
+                onClick={() => setTab("triage")}
+                className="p-4 rounded-2xl bg-white border border-slate-200 hover:border-[#0E4A43] transition-colors space-y-2 text-left"
+              >
+                <div className="text-2xl">🩺</div>
+                <div className="font-black text-slate-900 text-sm">Log Doorstep Patient Vitals</div>
+                <p className="text-xs text-slate-500">Record BP, pulse, SpO2, and trigger emergency escalations</p>
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ─── MATERNAL & CHILD HEALTH TAB ────────────────────────────────────── */}
-      {activeTab === "maternal_child" && (
-        <div className="space-y-6">
+      {/* ─── EMERGENCY 108 ESCALATION TAB ────────────────────────────────────── */}
+      {activeTab === "escalation" && (
+        <div className="bg-white rounded-3xl p-8 border border-slate-200/80 shadow-xs space-y-6">
           <div>
-            <h2 className="text-lg font-black text-slate-900">Maternal &amp; Child Health (MCH) Tracker</h2>
-            <p className="text-xs text-slate-500">Antenatal checkups, high-risk pregnancy monitoring, and child immunization follow-ups.</p>
+            <h2 className="text-xl font-black text-slate-900">Maharashtra 108 Emergency Ambulance Escalation</h2>
+            <p className="text-xs text-slate-500">Direct frontline hotline to government emergency response services</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {mchList.map((mch) => (
-              <div key={mch.id} className="bg-white rounded-[28px] p-6 border border-slate-200/80 shadow-xs space-y-3 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="font-black text-base text-slate-900">{mch.motherName}</span>
-                  <span className={`px-2.5 py-0.5 rounded-full font-black text-[10px] ${
-                    mch.riskLevel === "HIGH RISK" ? "bg-rose-100 text-rose-800 border border-rose-200" : "bg-emerald-100 text-emerald-800"
-                  }`}>
-                    {mch.riskLevel}
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 p-3 bg-[#EFF2F5] rounded-xl">
-                  <div>
-                    <span className="text-[10px] text-slate-400 font-bold block uppercase">Estimated Delivery</span>
-                    <span className="font-bold text-slate-900">{mch.edd}</span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-slate-400 font-bold block uppercase">Stage</span>
-                    <span className="font-bold text-slate-900">{mch.trimester}</span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-slate-400 font-bold block uppercase">ANC Visits</span>
-                    <span className="font-bold text-emerald-800">{mch.ancCount}</span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-slate-400 font-bold block uppercase">Hemoglobin (Hb)</span>
-                    <span className="font-bold text-rose-700">{mch.hb}</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                  <span className="text-slate-500">IFA Stock Delivered: <strong className="text-slate-900">{mch.ifaGiven}</strong></span>
-                  <button
-                    onClick={() => alert(`Opening ANC clinical card for ${mch.motherName}...`)}
-                    className="text-[#0E4A43] font-bold hover:underline"
-                  >
-                    Update ANC Card &rsaquo;
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ─── EMERGENCY ESCALATION TAB ────────────────────────────────────────── */}
-      {activeTab === "emergency" && (
-        <div className="space-y-6 max-w-2xl">
-          <div className="bg-rose-50 border border-rose-200 rounded-[28px] p-6 space-y-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-rose-600 text-white flex items-center justify-center text-xl font-black">
-                !
-              </div>
-              <div>
-                <h3 className="text-base font-black text-rose-950">24x7 Maharashtra Emergency Escalation</h3>
-                <p className="text-xs text-rose-800">Dispatch 108 Emergency Ambulance or 104 Health Helpline immediately.</p>
-              </div>
-            </div>
-            <div className="flex gap-3 pt-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="p-6 rounded-3xl bg-rose-50 border border-rose-200 space-y-3">
+              <div className="text-3xl">🚑</div>
+              <h3 className="font-black text-rose-900 text-lg">108 Emergency Ambulance Service</h3>
+              <p className="text-xs text-rose-700">
+                Toll-free 24x7 emergency medical transfer. Dispatches nearest ALS/BLS ambulance with GPS tracking.
+              </p>
               <a
                 href="tel:108"
-                className="px-5 py-3 rounded-full bg-rose-600 text-white text-xs font-black hover:bg-rose-700 shadow-xs flex items-center gap-2"
+                className="inline-block px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xs shadow-md transition-colors"
               >
-                <span>Dial 108 Ambulance</span>
+                Call 108 Emergency Now
               </a>
+            </div>
+
+            <div className="p-6 rounded-3xl bg-blue-50 border border-blue-200 space-y-3">
+              <div className="text-3xl">📞</div>
+              <h3 className="font-black text-blue-900 text-lg">104 Health Advice Helpline</h3>
+              <p className="text-xs text-blue-700">
+                Government telephonic medical advice, suicide prevention, and maternal emergency support in Marathi &amp; Hindi.
+              </p>
               <a
                 href="tel:104"
-                className="px-5 py-3 rounded-full bg-white text-slate-900 border border-slate-200 text-xs font-bold hover:bg-slate-100"
+                className="inline-block px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs shadow-md transition-colors"
               >
-                <span>Call 104 Medical Helpline</span>
+                Call 104 Medical Helpline
               </a>
             </div>
           </div>
@@ -457,18 +799,28 @@ export function HealthWorkerDashboard({ user, activeTab, setTab }: HealthWorkerD
 
       {/* ─── WORKER PROFILE TAB ──────────────────────────────────────────────── */}
       {activeTab === "profile" && (
-        <div className="space-y-6 max-w-2xl">
-          <div className="bg-white rounded-[28px] p-6 border border-slate-200/80 shadow-xs space-y-4 text-xs">
-            <h3 className="text-base font-black text-slate-900">Health Worker Profile &amp; Catchment</h3>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="p-3.5 bg-[#EFF2F5] rounded-2xl">
-                <span className="text-[10px] text-slate-400 font-bold uppercase block">Worker Role</span>
-                <span className="text-sm font-bold text-slate-900">ASHA / ANM Frontline Worker</span>
-              </div>
-              <div className="p-3.5 bg-[#EFF2F5] rounded-2xl">
-                <span className="text-[10px] text-slate-400 font-bold uppercase block">Assigned Village Area</span>
-                <span className="text-sm font-bold text-slate-900">{worker?.villageArea || "Ambegaon Catchment"}</span>
-              </div>
+        <div className="bg-white rounded-3xl p-8 border border-slate-200/80 shadow-xs space-y-6">
+          <div>
+            <h2 className="text-xl font-black text-slate-900">Frontline Health Worker Profile</h2>
+            <p className="text-xs text-slate-500">Institutional registration and assigned village sub-centres</p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+            <div className="p-4 bg-[#EFF2F5] rounded-2xl space-y-1">
+              <div className="text-slate-400 uppercase text-[10px] font-bold">Worker Designation</div>
+              <div className="font-black text-slate-900 text-sm">{worker?.workerType || "ASHA Frontline Worker"}</div>
+            </div>
+            <div className="p-4 bg-[#EFF2F5] rounded-2xl space-y-1">
+              <div className="text-slate-400 uppercase text-[10px] font-bold">Village Jurisdiction Area</div>
+              <div className="font-black text-slate-900 text-sm">{worker?.villageArea || "Rural Sub-Centre"}</div>
+            </div>
+            <div className="p-4 bg-[#EFF2F5] rounded-2xl space-y-1">
+              <div className="text-slate-400 uppercase text-[10px] font-bold">Affiliated Primary Health Centre</div>
+              <div className="font-black text-slate-900 text-sm">{worker?.facility?.name || "PHC Ambegaon"}</div>
+            </div>
+            <div className="p-4 bg-[#EFF2F5] rounded-2xl space-y-1">
+              <div className="text-slate-400 uppercase text-[10px] font-bold">Contact Email / Phone</div>
+              <div className="font-black text-[#0E4A43] font-mono text-sm">{user.email} &bull; {user.phone || "Registered"}</div>
             </div>
           </div>
         </div>

@@ -22,14 +22,12 @@ async function seedUser(input: {
   });
 
   if (createError) {
-    // If user already exists in auth, retrieve them
     const { data: listData } = await supabaseAdmin.auth.admin.listUsers();
     const found = listData?.users?.find((u) => u.email?.toLowerCase() === cleanEmail);
     if (!found) {
       throw new Error(`Failed to create/find Supabase auth user for ${cleanEmail}: ${createError.message}`);
     }
     userId = found.id;
-    // Update password to ensure it matches
     await supabaseAdmin.auth.admin.updateUserById(userId, { password });
   } else {
     userId = createData.user.id;
@@ -67,14 +65,13 @@ export async function runSeed() {
 
   // ─── 1. Super Admin ─────────────────────────────────────────────────────────
   console.log('👑 Seeding Super Admin...');
-  const superAdmin = await seedUser({
+  await seedUser({
     email: 'superadmin@swasthya.gov.in',
     password: 'SuperAdmin@123',
     fullName: 'Dr. Rajesh Sharma (Director Health Services)',
     phone: '9800000001',
     role: UserRole.SUPER_ADMIN,
   });
-  console.log(`   Super Admin ready: ${superAdmin.email}`);
 
   // ─── 2. District Admins ─────────────────────────────────────────────────────
   console.log('🏛️ Seeding District Admins...');
@@ -191,29 +188,6 @@ export async function runSeed() {
         { testName: 'Blood Culture & Sensitivity', category: 'Microbiology', isAvailable: true, turnaroundHours: 48, costInr: 0 },
       ],
     },
-    {
-      name: 'Nashik District Civil Hospital',
-      type: FacilityType.DISTRICT_HOSPITAL,
-      district: 'Nashik',
-      village: 'Nashik City',
-      address: 'Trimbak Road, Nashik',
-      pincode: '422002',
-      latitude: new Prisma.Decimal(19.9975),
-      longitude: new Prisma.Decimal(73.7898),
-      contactPhone: '0253-2572000',
-      contactEmail: 'civil.nashik@swasthya.gov.in',
-      workingHours: '24x7 Multi-Specialty & ICU',
-      bedStatus: { totalBeds: 200, availableBeds: 28, oxygenBedsTotal: 50, oxygenBedsAvailable: 10, icuBedsTotal: 20, icuBedsAvailable: 3 },
-      services: ['General Surgery', 'Obstetrics & Gynecology', 'Pediatrics', 'Orthopedics', 'Dialysis Center', '24x7 Pharmacy'],
-      medicines: [
-        { medicineName: 'Paracetamol 500mg', category: 'Analgesic', quantity: 3000, unit: 'strips', isAvailable: true },
-        { medicineName: 'Anti-Rabies Vaccine', category: 'Immunization', quantity: 100, unit: 'vials', isAvailable: true },
-      ],
-      diagnostics: [
-        { testName: 'Digital Chest X-Ray', category: 'Radiology', isAvailable: true, turnaroundHours: 1, costInr: 0 },
-        { testName: 'Ultrasonography (USG)', category: 'Radiology', isAvailable: true, turnaroundHours: 3, costInr: 0 },
-      ],
-    },
   ];
 
   const createdFacilities: Record<string, string> = {};
@@ -248,10 +222,11 @@ export async function runSeed() {
     createdFacilities[fac.name] = facilityId!;
   }
 
+  const ambegaonFacilityId = createdFacilities['Primary Health Centre (PHC) Ambegaon'];
+  const aundhFacilityId = createdFacilities['Aundh District Civil Hospital'];
+
   // ─── 4. Facility Admins ─────────────────────────────────────────────────────
   console.log('👨‍💼 Seeding Facility Admins...');
-
-  const ambegaonFacilityId = createdFacilities['Primary Health Centre (PHC) Ambegaon'];
   const adminAmbegaon = await seedUser({
     email: 'admin.ambegaon@swasthya.gov.in',
     password: 'FacilityAdmin@123',
@@ -267,25 +242,8 @@ export async function runSeed() {
     });
   }
 
-  const aundhFacilityId = createdFacilities['Aundh District Civil Hospital'];
-  const adminAundh = await seedUser({
-    email: 'admin.aundh@swasthya.gov.in',
-    password: 'FacilityAdmin@123',
-    fullName: 'Dr. Ramesh Deshmukh (Hospital Administrator)',
-    phone: '9800000005',
-    role: UserRole.FACILITY_ADMIN,
-  });
-  if (aundhFacilityId) {
-    await prisma.facilityAdmin.upsert({
-      where: { userId: adminAundh.id },
-      create: { userId: adminAundh.id, facilityId: aundhFacilityId },
-      update: { facilityId: aundhFacilityId },
-    });
-  }
-
   // ─── 5. Doctors ─────────────────────────────────────────────────────────────
   console.log('🩺 Seeding Doctors...');
-
   const doctor1 = await seedUser({
     email: 'doctor.pune@swasthya.gov.in',
     password: 'Doctor@123',
@@ -293,7 +251,7 @@ export async function runSeed() {
     phone: '9800000006',
     role: UserRole.DOCTOR,
   });
-  await prisma.doctor.upsert({
+  const doc = await prisma.doctor.upsert({
     where: { userId: doctor1.id },
     create: {
       userId: doctor1.id,
@@ -310,33 +268,8 @@ export async function runSeed() {
     },
   });
 
-  const doctor2 = await seedUser({
-    email: 'dr.patil@swasthya.gov.in',
-    password: 'Doctor@123',
-    fullName: 'Dr. Sunita Patil',
-    phone: '9800000007',
-    role: UserRole.DOCTOR,
-  });
-  await prisma.doctor.upsert({
-    where: { userId: doctor2.id },
-    create: {
-      userId: doctor2.id,
-      specialty: 'Obstetrics & Maternal Care',
-      qualification: 'MBBS, DGO',
-      registrationNo: 'MMC-2018-49281',
-      facilityId: ambegaonFacilityId,
-    },
-    update: {
-      specialty: 'Obstetrics & Maternal Care',
-      qualification: 'MBBS, DGO',
-      registrationNo: 'MMC-2018-49281',
-      facilityId: ambegaonFacilityId,
-    },
-  });
-
   // ─── 6. Frontline Health Workers (ASHA) ────────────────────────────────────
   console.log('👩‍⚕️ Seeding ASHA & ANM Workers...');
-
   const asha1 = await seedUser({
     email: 'asha.ambegaon@swasthya.gov.in',
     password: 'AshaWorker@123',
@@ -344,7 +277,7 @@ export async function runSeed() {
     phone: '9800000008',
     role: UserRole.HEALTH_WORKER,
   });
-  await prisma.healthWorker.upsert({
+  const hw = await prisma.healthWorker.upsert({
     where: { userId: asha1.id },
     create: {
       userId: asha1.id,
@@ -359,7 +292,159 @@ export async function runSeed() {
     },
   });
 
-  console.log('✅ [SEED]: Database seeding completed successfully!');
+  // ─── 7. Citizen / Patient ──────────────────────────────────────────────────
+  console.log('👤 Seeding Test Citizen / Patient...');
+  const patientUser = await seedUser({
+    email: 'patient.pune@swasthya.gov.in',
+    password: 'Patient@123',
+    fullName: 'Ramesh Tukaram Patil',
+    phone: '9800000009',
+    role: UserRole.PATIENT,
+  });
+  const pat = await prisma.patient.upsert({
+    where: { userId: patientUser.id },
+    create: {
+      userId: patientUser.id,
+      village: 'Ambegaon',
+      district: 'Pune',
+      state: 'Maharashtra',
+      bloodGroup: 'B+',
+      abhaId: '91-4029-8812-4419',
+      facilityId: ambegaonFacilityId,
+    },
+    update: {
+      village: 'Ambegaon',
+      district: 'Pune',
+      bloodGroup: 'B+',
+      abhaId: '91-4029-8812-4419',
+    },
+  });
+
+  // Seed initial live records if tables are empty
+  const apptCount = await prisma.appointment.count();
+  if (apptCount === 0 && pat && doc && ambegaonFacilityId) {
+    console.log('📅 Seeding sample appointment...');
+    await prisma.appointment.create({
+      data: {
+        patientId: pat.id,
+        doctorId: doc.id,
+        facilityId: ambegaonFacilityId,
+        type: 'IN_PERSON',
+        appointmentDate: new Date(),
+        slot: '10:30 AM - 11:30 AM',
+        status: 'CONFIRMED',
+        token: 'Token #01',
+        notes: 'Follow up checkup for seasonal pyrexia and vitals check',
+      },
+    });
+  }
+
+  const rxCount = await prisma.prescription.count();
+  if (rxCount === 0 && pat && doc && ambegaonFacilityId) {
+    console.log('💊 Seeding sample prescription...');
+    await prisma.prescription.create({
+      data: {
+        patientId: pat.id,
+        doctorId: doc.id,
+        facilityId: ambegaonFacilityId,
+        diagnosis: 'Acute Upper Respiratory Tract Infection',
+        advice: 'Drink warm water and rest for 3 days',
+        followUpDate: new Date(Date.now() + 5 * 86400000),
+        items: {
+          create: [
+            { medicineName: 'Paracetamol 500mg', dosage: '1 tablet TDS', duration: '5 days', instructions: 'After food', inStock: true },
+            { medicineName: 'Amoxicillin 500mg', dosage: '1 capsule BD', duration: '5 days', instructions: 'After food', inStock: true },
+            { medicineName: 'ORS Sachets', dosage: '1 packet in 1L water', duration: '3 days', instructions: 'Throughout the day', inStock: true },
+          ],
+        },
+      },
+    });
+  }
+
+  const refCount = await prisma.referral.count();
+  if (refCount === 0 && pat && ambegaonFacilityId && aundhFacilityId) {
+    console.log('🔄 Seeding sample referral...');
+    await prisma.referral.create({
+      data: {
+        patientId: pat.id,
+        fromFacilityId: ambegaonFacilityId,
+        toFacilityId: aundhFacilityId,
+        createdById: doctor1.id,
+        reason: 'Requires advanced chest imaging (CT) and pulmonology evaluation',
+        requiredSpecialty: 'Pulmonology',
+        priority: 'URGENT',
+        status: 'BED_RESERVED',
+        notes: 'Bed reserved in Inpatient Ward 4',
+      },
+    });
+  }
+
+  const triageCount = await prisma.triageAssessment.count();
+  if (triageCount === 0 && pat && ambegaonFacilityId) {
+    console.log('🩺 Seeding sample triage record...');
+    await prisma.triageAssessment.create({
+      data: {
+        patientId: pat.id,
+        patientName: patientUser.fullName,
+        patientAge: 48,
+        patientGender: 'MALE',
+        village: 'Ambegaon',
+        assessedById: asha1.id,
+        facilityId: ambegaonFacilityId,
+        bpSystolic: 135,
+        bpDiastolic: 88,
+        spo2: 97,
+        temperature: new Prisma.Decimal(99.2),
+        pulse: 78,
+        symptoms: ['Fever', 'Mild Cough'],
+        priority: 'ROUTINE',
+        actionTaken: 'Assisted Tele-OPD consult initiated at Sub-Centre kiosk',
+      },
+    });
+  }
+
+  const mchCount = await prisma.mchRecord.count();
+  if (mchCount === 0 && hw && ambegaonFacilityId) {
+    console.log('🤰 Seeding sample MCH record...');
+    await prisma.mchRecord.create({
+      data: {
+        healthWorkerId: hw.id,
+        facilityId: ambegaonFacilityId,
+        motherName: 'Pooja Santosh Gaikwad',
+        age: 23,
+        village: 'Ambegaon',
+        edd: new Date(Date.now() + 45 * 86400000),
+        trimester: '3rd Trimester',
+        riskLevel: 'NORMAL',
+        ancCount: 3,
+        hemoglobin: new Prisma.Decimal(11.4),
+        ifaDelivered: true,
+        notes: '3 of 4 ANC checkups completed. Blood pressure normal.',
+      },
+    });
+  }
+
+  const diagCount = await prisma.diagnosticReport.count();
+  if (diagCount === 0 && pat && ambegaonFacilityId) {
+    console.log('🧪 Seeding sample diagnostic lab report...');
+    await prisma.diagnosticReport.create({
+      data: {
+        patientId: pat.id,
+        facilityId: ambegaonFacilityId,
+        doctorId: doc ? doc.id : null,
+        testName: 'Complete Blood Count (CBC)',
+        category: 'Pathology',
+        status: 'COMPLETED',
+        sampleCollectedAt: new Date(),
+        keyResult: 'Hemoglobin: 13.2 g/dL (Normal) | WBC: 7,400 /mcL',
+        findings: 'Normal hemogram parameters. No active leukocytosis.',
+        normalRange: 'Hb: 12.0 - 15.5 g/dL | WBC: 4,000 - 11,000 /mcL',
+        verifiedBy: 'Dr. Anand Kulkarni (Medical Officer)',
+      },
+    });
+  }
+
+  console.log('✅ [SEED]: Database seeding completed successfully with live records!');
 }
 
 if (require.main === module) {
