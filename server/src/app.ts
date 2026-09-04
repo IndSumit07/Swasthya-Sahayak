@@ -52,7 +52,9 @@ if (env.NODE_ENV !== 'test') {
 // Root Route
 app.get('/', (_req, res) => {
   res.status(200).json({
-    name: 'Swasthya Sahayak API',
+    name: 'Swasthya Sahayak Backend API',
+    version: '1.1.0',
+    deployment: 'github-actions-verified',
     status: 'online',
     docs: '/api/v1/health',
   });

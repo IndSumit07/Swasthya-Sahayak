@@ -42,6 +42,8 @@ export const getHealthStatus = async (_req: Request, res: Response): Promise<voi
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
     environment: env.NODE_ENV,
+    version: '1.1.0',
+    deployment: 'github-actions-verified',
     status: 'UP',
     services: {
       supabase: {

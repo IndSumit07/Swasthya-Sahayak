@@ -281,11 +281,14 @@ git push origin main
 ---
 
 ### Step 4.2: Configure Environment Variables on Vercel
-Under the **Environment Variables** section on Vercel, add:
+Under the **Environment Variables** section on Vercel, you only need to add **one variable**:
 
 | Key | Value | Description |
 |---|---|---|
-| `NEXT_PUBLIC_API_URL` | `http://<YOUR-EC2-PUBLIC-IP>:4000/api/v1` | URL pointing to your live EC2 backend API |
+| `NEXT_API_URL` | `http://<YOUR-EC2-PUBLIC-IP>:4000/api/v1` | URL pointing to your live EC2 backend API |
+
+> [!NOTE]
+> **No Supabase keys are needed on Vercel/client!** All database, auth, and business logic calls route securely through your EC2 Express backend API (`NEXT_API_URL`), which holds the secure database connections.
 
 Click **Deploy**!
 

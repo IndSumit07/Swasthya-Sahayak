@@ -29,6 +29,7 @@ const startServer = async () => {
   }
 
   const server = app.listen(env.PORT, () => {
+    logger.info(`Swasthya Sahayak Backend v1.1.0 [GitHub Actions CI/CD Active]`);
     logger.info(`Server running in ${env.NODE_ENV} mode on port ${env.PORT}`);
     logger.info(`Health check: http://localhost:${env.PORT}/api/v1/health`);
   });
