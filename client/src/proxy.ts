@@ -1,6 +1,10 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
-const API_BASE = (process.env.NEXT_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1').replace(/\/+$/, '');
+const API_BASE = (
+  process.env.NEXT_API_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  (process.env.NODE_ENV === 'production' ? 'https://ss.api.sumoraai.in/api/v1' : 'http://localhost:4000/api/v1')
+).replace(/\/+$/, '');
 
 // Routes that require authentication
 const PROTECTED_PREFIXES = ['/dashboard'];
@@ -20,6 +24,11 @@ export async function proxy(request: NextRequest) {
 
   // Forward the cookies from the browser request to the Express /auth/me check
   const cookieHeader = request.headers.get('cookie') ?? '';
+
+  // If no cookies on frontend domain, let client component verify via cross-origin fetch
+  if (!cookieHeader) {
+    return NextResponse.next();
+  }
 
   let isAuthenticated = false;
   let userRole: string | null = null;

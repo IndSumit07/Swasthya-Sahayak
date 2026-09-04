@@ -6,6 +6,13 @@
  * Resolves the backend API base URL from NEXT_API_URL or defaults to localhost for local dev.
  */
 export function getBaseUrl(): string {
+  // In the browser on a production domain (e.g. *.vercel.app), use relative '/api/v1'
+  // so cookies are set directly on the frontend domain and forwarded to Next.js middleware
+  if (typeof window !== 'undefined') {
+    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      return '/api/v1';
+    }
+  }
   const envUrl = (process.env.NEXT_API_URL || process.env.NEXT_PUBLIC_API_URL || '').trim();
   if (envUrl !== '') {
     return envUrl.replace(/\/+$/, '');

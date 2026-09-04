@@ -23,8 +23,7 @@ function LoginForm() {
     setLoading(true);
     try {
       await authApi.login({ email, password });
-      router.push(nextPath);
-      router.refresh();
+      window.location.href = nextPath;
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Login failed. Please try again.");
     } finally {
