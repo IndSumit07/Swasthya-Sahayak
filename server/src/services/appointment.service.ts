@@ -1,15 +1,36 @@
 import { prisma } from "../config/prisma";
+import { redisCache } from "../config/redis";
 import { AppointmentType, AppointmentStatus } from "@prisma/client";
+
+/**
+ * Invalidate Redis caches for appointments on updates/creations
+ */
+export async function invalidateAppointmentCaches(id?: string): Promise<void> {
+  try {
+    if (id) {
+      await redisCache.del(`appointments:id:${id}`);
+    }
+    await redisCache.delPattern("appointments:list:*");
+  } catch {
+    // Non-blocking
+  }
+}
 
 export class AppointmentService {
   static async list(filters: { patientId?: string; doctorId?: string; facilityId?: string; status?: AppointmentStatus }) {
+    const cacheKey = `appointments:list:${filters.patientId || "ALL"}:${filters.doctorId || "ALL"}:${filters.facilityId || "ALL"}:${filters.status || "ALL"}`;
+    const cached = await redisCache.get<any[]>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     const where: any = {};
     if (filters.patientId) where.patientId = filters.patientId;
     if (filters.doctorId) where.doctorId = filters.doctorId;
     if (filters.facilityId) where.facilityId = filters.facilityId;
     if (filters.status) where.status = filters.status;
 
-    return prisma.appointment.findMany({
+    const appointments = await prisma.appointment.findMany({
       where,
       include: {
         facility: {
@@ -47,10 +68,21 @@ export class AppointmentService {
       },
       orderBy: { appointmentDate: "desc" },
     });
+
+    // Cache appointment list for 60 seconds (1 minute TTL)
+    await redisCache.set(cacheKey, appointments, 60);
+
+    return appointments;
   }
 
   static async getById(id: string) {
-    return prisma.appointment.findUnique({
+    const cacheKey = `appointments:id:${id}`;
+    const cached = await redisCache.get<any>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const appointment = await prisma.appointment.findUnique({
       where: { id },
       include: {
         facility: true,
@@ -58,6 +90,13 @@ export class AppointmentService {
         patient: { include: { user: true } },
       },
     });
+
+    if (appointment) {
+      // Cache appointment detail for 2 minutes (120 seconds TTL)
+      await redisCache.set(cacheKey, appointment, 120);
+    }
+
+    return appointment;
   }
 
   static async create(data: {
@@ -77,7 +116,7 @@ export class AppointmentService {
     });
     const token = `Token #${count + 1}`;
 
-    return prisma.appointment.create({
+    const appointment = await prisma.appointment.create({
       data: {
         patientId: data.patientId,
         facilityId: data.facilityId,
@@ -95,18 +134,27 @@ export class AppointmentService {
         patient: { include: { user: true } },
       },
     });
+
+    await invalidateAppointmentCaches();
+    return appointment;
   }
 
   static async updateStatus(id: string, status: AppointmentStatus) {
-    return prisma.appointment.update({
+    const updated = await prisma.appointment.update({
       where: { id },
       data: { status },
     });
+
+    await invalidateAppointmentCaches(id);
+    return updated;
   }
 
   static async delete(id: string) {
-    return prisma.appointment.delete({
+    const deleted = await prisma.appointment.delete({
       where: { id },
     });
+
+    await invalidateAppointmentCaches(id);
+    return deleted;
   }
 }

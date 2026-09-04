@@ -1,15 +1,33 @@
 import { prisma } from "../config/prisma";
+import { redisCache } from "../config/redis";
 import { DiagnosticStatus } from "@prisma/client";
+
+/**
+ * Invalidate Redis caches for diagnostic reports
+ */
+export async function invalidateDiagnosticCaches(): Promise<void> {
+  try {
+    await redisCache.delPattern("diagnostics:list:*");
+  } catch {
+    // Non-blocking
+  }
+}
 
 export class DiagnosticReportService {
   static async list(filters: { patientId?: string; facilityId?: string; doctorId?: string; status?: DiagnosticStatus }) {
+    const cacheKey = `diagnostics:list:${filters.patientId || "ALL"}:${filters.facilityId || "ALL"}:${filters.doctorId || "ALL"}:${filters.status || "ALL"}`;
+    const cached = await redisCache.get<any[]>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     const where: any = {};
     if (filters.patientId) where.patientId = filters.patientId;
     if (filters.facilityId) where.facilityId = filters.facilityId;
     if (filters.doctorId) where.doctorId = filters.doctorId;
     if (filters.status) where.status = filters.status;
 
-    return prisma.diagnosticReport.findMany({
+    const reports = await prisma.diagnosticReport.findMany({
       where,
       include: {
         facility: {
@@ -43,6 +61,11 @@ export class DiagnosticReportService {
       },
       orderBy: { createdAt: "desc" },
     });
+
+    // Cache diagnostic reports list for 60 seconds (1 minute TTL)
+    await redisCache.set(cacheKey, reports, 60);
+
+    return reports;
   }
 
   static async create(data: {
@@ -58,7 +81,7 @@ export class DiagnosticReportService {
     normalRange?: string;
     verifiedBy?: string;
   }) {
-    return prisma.diagnosticReport.create({
+    const report = await prisma.diagnosticReport.create({
       data: {
         patientId: data.patientId,
         facilityId: data.facilityId,
@@ -77,11 +100,17 @@ export class DiagnosticReportService {
         patient: { include: { user: true } },
       },
     });
+
+    await invalidateDiagnosticCaches();
+    return report;
   }
 
   static async delete(id: string) {
-    return prisma.diagnosticReport.delete({
+    const deleted = await prisma.diagnosticReport.delete({
       where: { id },
     });
+
+    await invalidateDiagnosticCaches();
+    return deleted;
   }
 }

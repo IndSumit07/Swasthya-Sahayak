@@ -173,6 +173,8 @@ export const adminService = {
     await Promise.all([
       redisCache.del(`user:profile:${user.id}`),
       redisCache.del(`user:identity:${user.id}`),
+      redisCache.delPattern('admin:staff:*'),
+      redisCache.delPattern('admin:district:summary:*'),
     ]).catch(() => {});
 
     return {
@@ -195,6 +197,12 @@ export const adminService = {
       if (adminRecord && adminRecord.district !== 'ALL') {
         districtScope = adminRecord.district;
       }
+    }
+
+    const cacheKey = `admin:staff:${actor.userId}:${actor.role}:${filters.role || 'ALL'}:${(districtScope || 'ALL').toUpperCase()}`;
+    const cached = await redisCache.get<any[]>(cacheKey);
+    if (cached) {
+      return cached;
     }
 
     const staff = await prisma.user.findMany({
@@ -221,13 +229,23 @@ export const adminService = {
       take: 100,
     });
 
+    // Cache staff list for 60 seconds
+    await redisCache.set(cacheKey, staff, 60);
+
     return staff;
   },
 
   /**
    * District-wide facility & resource summary.
+   * High-traffic metric queried immediately on district & state dashboards.
    */
   async getDistrictSummary(district?: string) {
+    const cacheKey = `admin:district:summary:${(district || 'ALL').toUpperCase()}`;
+    const cached = await redisCache.get<any>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     const facilities = await prisma.facility.findMany({
       where: district && district !== "ALL" ? { district: { equals: district, mode: "insensitive" } } : undefined,
       include: {
@@ -242,12 +260,17 @@ export const adminService = {
     const availableBeds = facilities.reduce((sum, f) => sum + (f.bedStatus?.availableBeds ?? 0), 0);
     const totalDoctors = facilities.reduce((sum, f) => sum + f.doctors.length, 0);
 
-    return {
+    const summary = {
       district: district || "All Maharashtra",
       totalFacilities,
       totalBeds,
       availableBeds,
       totalDoctors,
     };
+
+    // Cache district summary metrics for 3 minutes (180s TTL)
+    await redisCache.set(cacheKey, summary, 180);
+
+    return summary;
   },
 };

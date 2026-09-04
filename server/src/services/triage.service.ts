@@ -1,4 +1,5 @@
 import { prisma } from "../config/prisma";
+import { redisCache } from "../config/redis";
 import { Gender, TriagePriority } from "@prisma/client";
 
 export interface CreateTriageInput {
@@ -19,15 +20,32 @@ export interface CreateTriageInput {
   notes?: string;
 }
 
+/**
+ * Invalidate Redis caches for triage assessments
+ */
+export async function invalidateTriageCaches(): Promise<void> {
+  try {
+    await redisCache.delPattern("triage:list:*");
+  } catch {
+    // Non-blocking
+  }
+}
+
 export class TriageService {
   static async list(filters: { patientId?: string; assessedById?: string; facilityId?: string; priority?: TriagePriority }) {
+    const cacheKey = `triage:list:${filters.patientId || "ALL"}:${filters.assessedById || "ALL"}:${filters.facilityId || "ALL"}:${filters.priority || "ALL"}`;
+    const cached = await redisCache.get<any[]>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     const where: any = {};
     if (filters.patientId) where.patientId = filters.patientId;
     if (filters.assessedById) where.assessedById = filters.assessedById;
     if (filters.facilityId) where.facilityId = filters.facilityId;
     if (filters.priority) where.priority = filters.priority;
 
-    return prisma.triageAssessment.findMany({
+    const assessments = await prisma.triageAssessment.findMany({
       where,
       include: {
         facility: true,
@@ -52,6 +70,11 @@ export class TriageService {
       },
       orderBy: { createdAt: "desc" },
     });
+
+    // Cache triage assessments list for 60 seconds (1 minute TTL)
+    await redisCache.set(cacheKey, assessments, 60);
+
+    return assessments;
   }
 
   static async create(data: CreateTriageInput) {
@@ -70,7 +93,7 @@ export class TriageService {
       actionTaken = "Assisted Tele-OPD consult recommended within 24 hours.";
     }
 
-    return prisma.triageAssessment.create({
+    const assessment = await prisma.triageAssessment.create({
       data: {
         patientId: data.patientId || null,
         patientName: data.patientName,
@@ -95,11 +118,17 @@ export class TriageService {
         assessedBy: true,
       },
     });
+
+    await invalidateTriageCaches();
+    return assessment;
   }
 
   static async delete(id: string) {
-    return prisma.triageAssessment.delete({
+    const deleted = await prisma.triageAssessment.delete({
       where: { id },
     });
+
+    await invalidateTriageCaches();
+    return deleted;
   }
 }

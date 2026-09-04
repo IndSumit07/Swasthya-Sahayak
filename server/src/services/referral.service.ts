@@ -1,8 +1,29 @@
 import { prisma } from "../config/prisma";
+import { redisCache } from "../config/redis";
 import { ReferralPriority, ReferralStatus } from "@prisma/client";
+
+/**
+ * Invalidate Redis caches for referrals
+ */
+export async function invalidateReferralCaches(id?: string): Promise<void> {
+  try {
+    if (id) {
+      await redisCache.del(`referrals:id:${id}`);
+    }
+    await redisCache.delPattern("referrals:list:*");
+  } catch {
+    // Non-blocking
+  }
+}
 
 export class ReferralService {
   static async list(filters: { patientId?: string; fromFacilityId?: string; toFacilityId?: string; status?: ReferralStatus; priority?: ReferralPriority; district?: string }) {
+    const cacheKey = `referrals:list:${filters.patientId || "ALL"}:${filters.fromFacilityId || "ALL"}:${filters.toFacilityId || "ALL"}:${filters.status || "ALL"}:${filters.priority || "ALL"}:${filters.district || "ALL"}`;
+    const cached = await redisCache.get<any[]>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     const where: any = {};
     if (filters.patientId) where.patientId = filters.patientId;
     if (filters.fromFacilityId) where.fromFacilityId = filters.fromFacilityId;
@@ -16,7 +37,7 @@ export class ReferralService {
       ];
     }
 
-    return prisma.referral.findMany({
+    const referrals = await prisma.referral.findMany({
       where,
       include: {
         fromFacility: true,
@@ -43,10 +64,21 @@ export class ReferralService {
       },
       orderBy: { createdAt: "desc" },
     });
+
+    // Cache referrals list for 60 seconds (1 minute TTL)
+    await redisCache.set(cacheKey, referrals, 60);
+
+    return referrals;
   }
 
   static async getById(id: string) {
-    return prisma.referral.findUnique({
+    const cacheKey = `referrals:id:${id}`;
+    const cached = await redisCache.get<any>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const referral = await prisma.referral.findUnique({
       where: { id },
       include: {
         fromFacility: true,
@@ -55,6 +87,13 @@ export class ReferralService {
         patient: { include: { user: true } },
       },
     });
+
+    if (referral) {
+      // Cache referral detail for 2 minutes (120 seconds TTL)
+      await redisCache.set(cacheKey, referral, 120);
+    }
+
+    return referral;
   }
 
   static async create(data: {
@@ -67,7 +106,7 @@ export class ReferralService {
     priority?: ReferralPriority;
     notes?: string;
   }) {
-    return prisma.referral.create({
+    const referral = await prisma.referral.create({
       data: {
         patientId: data.patientId,
         fromFacilityId: data.fromFacilityId,
@@ -86,10 +125,13 @@ export class ReferralService {
         patient: { include: { user: true } },
       },
     });
+
+    await invalidateReferralCaches();
+    return referral;
   }
 
   static async updateStatus(id: string, status: ReferralStatus) {
-    return prisma.referral.update({
+    const updated = await prisma.referral.update({
       where: { id },
       data: { status },
       include: {
@@ -98,11 +140,17 @@ export class ReferralService {
         patient: { include: { user: true } },
       },
     });
+
+    await invalidateReferralCaches(id);
+    return updated;
   }
 
   static async delete(id: string) {
-    return prisma.referral.delete({
+    const deleted = await prisma.referral.delete({
       where: { id },
     });
+
+    await invalidateReferralCaches(id);
+    return deleted;
   }
 }

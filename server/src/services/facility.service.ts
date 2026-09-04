@@ -135,6 +135,30 @@ export function buildServiceWhereClause(service: string): Prisma.FacilityWhereIn
   return { OR: conditions };
 }
 
+/**
+ * Purge all relevant facility caches on resource mutations.
+ * Guarantees zero stale reads across directory, availability, and GPS queries.
+ */
+export async function invalidateFacilityCaches(facilityId?: string, invalidateCatalog = false): Promise<void> {
+  try {
+    const keysToDelete: string[] = [];
+    if (facilityId) {
+      keysToDelete.push(`facilities:id:${facilityId}`, `facilities:availability:${facilityId}`);
+    }
+    if (keysToDelete.length > 0) {
+      await Promise.all(keysToDelete.map((k) => redisCache.del(k)));
+    }
+    await Promise.all([
+      redisCache.delPattern('facilities:list:*'),
+      redisCache.delPattern('facilities:nearby:*'),
+      redisCache.delPattern('admin:district:summary:*'),
+      invalidateCatalog ? redisCache.del('facilities:services:catalog') : Promise.resolve(),
+    ]);
+  } catch (err) {
+    // Non-blocking catch
+  }
+}
+
 export const facilityService = {
   /**
    * Register a new healthcare facility (FR-05).
@@ -240,8 +264,8 @@ export const facilityService = {
       },
     });
 
-    // Invalidate any facilities search cache
-    await redisCache.delPattern('facilities:*').catch(() => {});
+    // Invalidate any facilities search cache and catalog
+    await invalidateFacilityCaches(facility.id, true);
 
     return facility;
   },
@@ -259,6 +283,13 @@ export const facilityService = {
     offset?: number;
   }) {
     const { district, type, search, hasAvailableBeds, service, limit = 50, offset = 0 } = query;
+
+    // Cache key incorporates all query parameters (TTL: 60 seconds)
+    const cacheKey = `facilities:list:${(district || 'ALL').toUpperCase()}:${(type || 'ALL').toUpperCase()}:${(search || '').trim().toLowerCase()}:${hasAvailableBeds ? '1' : '0'}:${(service || 'ALL').toUpperCase()}:${limit}:${offset}`;
+    const cached = await redisCache.get<{ facilities: any[]; total: number; limit: number; offset: number }>(cacheKey);
+    if (cached) {
+      return cached;
+    }
 
     const where: Prisma.FacilityWhereInput = {
       isActive: true,
@@ -314,7 +345,11 @@ export const facilityService = {
       prisma.facility.count({ where }),
     ]);
 
-    return { facilities, total, limit, offset };
+    const result = { facilities, total, limit, offset };
+    // Perfect TTL for frequently queried directories: 60 seconds
+    await redisCache.set(cacheKey, result, 60);
+
+    return result;
   },
 
   /**
@@ -353,8 +388,8 @@ export const facilityService = {
 
     if (!facility) throw new Error('Health facility not found');
 
-    // Cache for 5 minutes (300s)
-    await redisCache.set(cacheKey, facility, 300);
+    // Cache facility detail for 2 minutes (120s TTL)
+    await redisCache.set(cacheKey, facility, 120);
 
     return facility;
   },
@@ -365,6 +400,12 @@ export const facilityService = {
    * and Medicine availability matching the exact example format from FR-07.
    */
   async getFacilityAvailabilityMatrix(facilityId: string) {
+    const cacheKey = `facilities:availability:${facilityId}`;
+    const cached = await redisCache.get<any>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     const facility = await prisma.facility.findUnique({
       where: { id: facilityId },
       include: {
@@ -459,7 +500,7 @@ export const facilityService = {
       });
     }
 
-    return {
+    const result = {
       facilityId: facility.id,
       facilityName: facility.name,
       facilityType: facility.type,
@@ -513,6 +554,11 @@ export const facilityService = {
       })),
       summaryMatrix,
     };
+
+    // Cache live availability matrix for 60 seconds (1 minute)
+    await redisCache.set(cacheKey, result, 60);
+
+    return result;
   },
 
   /**
@@ -531,6 +577,16 @@ export const facilityService = {
       hasMedicine,
       testName,
     } = query;
+
+    // Round GPS coordinates to 2 decimal places (~1.1 km precision) to allow cache reuse for nearby users
+    const latRounded = Math.round(latitude * 100) / 100;
+    const lonRounded = Math.round(longitude * 100) / 100;
+    const cacheKey = `facilities:nearby:${latRounded}:${lonRounded}:${radiusKm}:${(district || 'ALL').toUpperCase()}:${(type || 'ALL').toUpperCase()}:${(serviceName || 'ALL').toUpperCase()}:${hasBeds ? '1' : '0'}:${hasDoctor ? '1' : '0'}:${(hasMedicine || '').trim().toLowerCase()}:${(testName || '').trim().toLowerCase()}`;
+
+    const cached = await redisCache.get<any[]>(cacheKey);
+    if (cached) {
+      return cached;
+    }
 
     const where: Prisma.FacilityWhereInput = {
       isActive: true,
@@ -603,6 +659,9 @@ export const facilityService = {
       .filter((f) => f.distanceKm <= radiusKm)
       .sort((a, b) => a.distanceKm - b.distanceKm);
 
+    // Cache nearby results for 60 seconds (1 min)
+    await redisCache.set(cacheKey, results, 60);
+
     return results;
   },
 
@@ -633,7 +692,7 @@ export const facilityService = {
       },
     });
 
-    await redisCache.del(`facilities:id:${facilityId}`);
+    await invalidateFacilityCaches(facilityId);
     return bedStatus;
   },
 
@@ -679,7 +738,7 @@ export const facilityService = {
       },
     });
 
-    await redisCache.del(`facilities:id:${facilityId}`);
+    await invalidateFacilityCaches(facilityId);
     return medicine;
   },
 
@@ -698,7 +757,7 @@ export const facilityService = {
       data: { isAvailable: newStatus },
     });
 
-    await redisCache.del(`facilities:id:${facilityId}`);
+    await invalidateFacilityCaches(facilityId);
     return updated;
   },
 
@@ -738,7 +797,7 @@ export const facilityService = {
       },
     });
 
-    await redisCache.del(`facilities:id:${facilityId}`);
+    await invalidateFacilityCaches(facilityId);
     return diagnostic;
   },
 
@@ -757,7 +816,7 @@ export const facilityService = {
       data: { isAvailable: newStatus },
     });
 
-    await redisCache.del(`facilities:id:${facilityId}`);
+    await invalidateFacilityCaches(facilityId);
     return updated;
   },
 
@@ -778,7 +837,7 @@ export const facilityService = {
       },
     });
 
-    await redisCache.del(`facilities:id:${facilityId}`);
+    await invalidateFacilityCaches(facilityId);
     return updated;
   },
 
@@ -818,7 +877,7 @@ export const facilityService = {
       },
     });
 
-    await redisCache.del(`facilities:id:${facilityId}`);
+    await invalidateFacilityCaches(facilityId);
     return slot;
   },
 
@@ -832,7 +891,7 @@ export const facilityService = {
       data: { isAvailable: newStatus },
     });
 
-    await redisCache.del(`facilities:id:${facilityId}`);
+    await invalidateFacilityCaches(facilityId);
     return updated;
   },
 
@@ -843,7 +902,7 @@ export const facilityService = {
     if (!slot) throw new Error('Slot not found');
 
     await prisma.facilitySlot.delete({ where: { id: slotId } });
-    await redisCache.del(`facilities:id:${facilityId}`);
+    await invalidateFacilityCaches(facilityId);
     return { success: true };
   },
 
@@ -870,7 +929,7 @@ export const facilityService = {
       },
     });
 
-    await redisCache.del(`facilities:id:${facilityId}`);
+    await invalidateFacilityCaches(facilityId, true);
     return service;
   },
 
@@ -881,11 +940,17 @@ export const facilityService = {
     if (!service) throw new Error('Service not found');
 
     await prisma.facilityService.delete({ where: { id: serviceId } });
-    await redisCache.del(`facilities:id:${facilityId}`);
+    await invalidateFacilityCaches(facilityId, true);
     return { success: true };
   },
 
   async getServicesCatalog() {
+    const cacheKey = 'facilities:services:catalog';
+    const cached = await redisCache.get<any[]>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     const counts = await prisma.facilityService.groupBy({
       by: ['name'],
       where: { isActive: true },
@@ -899,9 +964,14 @@ export const facilityService = {
       countMap[c.name.toLowerCase()] = c._count.facilityId;
     });
 
-    return STANDARD_SERVICES.map((s) => ({
+    const result = STANDARD_SERVICES.map((s) => ({
       ...s,
       facilityCount: countMap[s.name.toLowerCase()] || 0,
     }));
+
+    // Cache service catalog for 5 minutes (300 seconds)
+    await redisCache.set(cacheKey, result, 300);
+
+    return result;
   },
 };

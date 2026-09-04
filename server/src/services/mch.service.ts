@@ -1,4 +1,5 @@
 import { prisma } from "../config/prisma";
+import { redisCache } from "../config/redis";
 import { MchRiskLevel } from "@prisma/client";
 
 export interface CreateMchInput {
@@ -17,14 +18,31 @@ export interface CreateMchInput {
   notes?: string;
 }
 
+/**
+ * Invalidate Redis caches for MCH records
+ */
+export async function invalidateMchCaches(): Promise<void> {
+  try {
+    await redisCache.delPattern("mch:list:*");
+  } catch {
+    // Non-blocking
+  }
+}
+
 export class MchService {
   static async list(filters: { healthWorkerId?: string; facilityId?: string; riskLevel?: MchRiskLevel }) {
+    const cacheKey = `mch:list:${filters.healthWorkerId || "ALL"}:${filters.facilityId || "ALL"}:${filters.riskLevel || "ALL"}`;
+    const cached = await redisCache.get<any[]>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     const where: any = {};
     if (filters.healthWorkerId) where.healthWorkerId = filters.healthWorkerId;
     if (filters.facilityId) where.facilityId = filters.facilityId;
     if (filters.riskLevel) where.riskLevel = filters.riskLevel;
 
-    return prisma.mchRecord.findMany({
+    const records = await prisma.mchRecord.findMany({
       where,
       include: {
         facility: true,
@@ -41,10 +59,15 @@ export class MchService {
       },
       orderBy: { createdAt: "desc" },
     });
+
+    // Cache MCH list for 60 seconds (1 minute TTL)
+    await redisCache.set(cacheKey, records, 60);
+
+    return records;
   }
 
   static async create(data: CreateMchInput) {
-    return prisma.mchRecord.create({
+    const record = await prisma.mchRecord.create({
       data: {
         patientId: data.patientId || null,
         healthWorkerId: data.healthWorkerId || null,
@@ -64,6 +87,9 @@ export class MchService {
         facility: true,
       },
     });
+
+    await invalidateMchCaches();
+    return record;
   }
 
   static async update(id: string, data: Partial<CreateMchInput>) {
@@ -79,15 +105,21 @@ export class MchService {
     if (data.ifaDelivered !== undefined) updateData.ifaDelivered = data.ifaDelivered;
     if (data.notes !== undefined) updateData.notes = data.notes;
 
-    return prisma.mchRecord.update({
+    const updated = await prisma.mchRecord.update({
       where: { id },
       data: updateData,
     });
+
+    await invalidateMchCaches();
+    return updated;
   }
 
   static async delete(id: string) {
-    return prisma.mchRecord.delete({
+    const deleted = await prisma.mchRecord.delete({
       where: { id },
     });
+
+    await invalidateMchCaches();
+    return deleted;
   }
 }
