@@ -10,6 +10,7 @@ import referralRoutes         from './referral.routes';
 import triageRoutes           from './triage.routes';
 import mchRoutes              from './mch.routes';
 import diagnosticReportRoutes from './diagnosticReport.routes';
+import doctorRoutes           from './doctor.routes';
 
 const router = Router();
 
@@ -19,6 +20,7 @@ router.use('/auth',                authRoutes);
 router.use('/profile',             profileRoutes);
 router.use('/facilities',          facilityRoutes);
 router.use('/admin',               adminRoutes);
+router.use('/doctors',             doctorRoutes);
 router.use('/appointments',        appointmentRoutes);
 router.use('/prescriptions',       prescriptionRoutes);
 router.use('/referrals',           referralRoutes);

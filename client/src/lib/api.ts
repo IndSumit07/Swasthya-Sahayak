@@ -193,15 +193,43 @@ export const facilitiesApi = {
     }),
 };
 
+// ─── Doctors API (FR-13) ──────────────────────────────────────────────────────
+
+export const doctorsApi = {
+  search: (params?: {
+    specialty?: string;
+    facilityId?: string;
+    district?: string;
+    isAvailable?: boolean;
+    search?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const query = new URLSearchParams();
+    if (params?.specialty) query.set('specialty', params.specialty);
+    if (params?.facilityId) query.set('facilityId', params.facilityId);
+    if (params?.district) query.set('district', params.district);
+    if (params?.isAvailable !== undefined) query.set('isAvailable', String(params.isAvailable));
+    if (params?.search) query.set('search', params.search);
+    if (params?.limit) query.set('limit', String(params.limit));
+    if (params?.offset) query.set('offset', String(params.offset));
+    return apiFetch<{ success: boolean; data: { doctors: DoctorSearchResult[]; total: number; limit: number; offset: number } }>(`/doctors?${query.toString()}`);
+  },
+
+  getSpecialties: () =>
+    apiFetch<{ success: boolean; data: string[] }>('/doctors/specialties'),
+};
+
 // ─── Appointments API ─────────────────────────────────────────────────────────
 
 export const appointmentsApi = {
-  list: (params?: { patientId?: string; doctorId?: string; facilityId?: string; status?: string }) => {
+  list: (params?: { patientId?: string; doctorId?: string; facilityId?: string; status?: string; date?: string }) => {
     const query = new URLSearchParams();
     if (params?.patientId) query.set('patientId', params.patientId);
     if (params?.doctorId) query.set('doctorId', params.doctorId);
     if (params?.facilityId) query.set('facilityId', params.facilityId);
     if (params?.status) query.set('status', params.status);
+    if (params?.date) query.set('date', params.date);
     return apiFetch<{ success: boolean; data: Appointment[] }>(`/appointments?${query.toString()}`);
   },
 
@@ -210,6 +238,41 @@ export const appointmentsApi = {
 
   create: (body: { patientId?: string; facilityId: string; doctorId?: string; type?: string; appointmentDate: string; slot?: string; notes?: string }) =>
     apiFetch<{ success: boolean; data: Appointment; message: string }>('/appointments', { method: 'POST', body }),
+
+  getPatientQueue: (id: string) =>
+    apiFetch<{ success: boolean; data: PatientQueueStatus }>(`/appointments/${id}/queue`),
+
+  getFacilityQueue: (params: { facilityId: string; doctorId?: string; date?: string }) => {
+    const query = new URLSearchParams();
+    query.set('facilityId', params.facilityId);
+    if (params.doctorId) query.set('doctorId', params.doctorId);
+    if (params.date) query.set('date', params.date);
+    return apiFetch<{ success: boolean; data: FacilityQueueStatus }>(`/appointments/queue/status?${query.toString()}`);
+  },
+
+  callNextPatient: (body: { facilityId: string; doctorId?: string }) =>
+    apiFetch<{ success: boolean; data: any; message: string }>('/appointments/queue/call-next', {
+      method: 'POST',
+      body,
+    }),
+
+  reschedule: (id: string, body: { newDate: string; newSlot: string; newDoctorId?: string }) =>
+    apiFetch<{ success: boolean; data: Appointment; message: string }>(`/appointments/${id}/reschedule`, {
+      method: 'PATCH',
+      body,
+    }),
+
+  cancel: (id: string, reason?: string) =>
+    apiFetch<{ success: boolean; data: Appointment; message: string }>(`/appointments/${id}/cancel`, {
+      method: 'PATCH',
+      body: { reason },
+    }),
+
+  rebook: (id: string, body: { newDate: string; newSlot: string; newDoctorId?: string }) =>
+    apiFetch<{ success: boolean; data: Appointment; message: string }>(`/appointments/${id}/rebook`, {
+      method: 'POST',
+      body,
+    }),
 
   updateStatus: (id: string, status: string) =>
     apiFetch<{ success: boolean; data: Appointment; message: string }>(`/appointments/${id}/status`, { method: 'PATCH', body: { status } }),
@@ -790,3 +853,73 @@ export interface PatientStep2Body {
   currentMedications?: string[];
   notes?: string;
 }
+
+export interface DoctorSearchResult {
+  id: string;
+  userId: string;
+  specialty: string | null;
+  qualification: string | null;
+  registrationNo: string | null;
+  isAvailable: boolean;
+  facilityId: string | null;
+  user: {
+    id: string;
+    fullName: string;
+    email: string | null;
+    phone: string | null;
+    avatarUrl: string | null;
+  };
+  facility: {
+    id: string;
+    name: string;
+    type: string;
+    district: string;
+    village: string | null;
+    contactPhone: string | null;
+    workingHours: string | null;
+  } | null;
+  rosterEntries?: Array<{
+    shiftName: string;
+    startTime: string;
+    endTime: string;
+    status: string;
+  }>;
+}
+
+export interface PatientQueueStatus {
+  appointmentId: string;
+  yourToken: string;
+  currentToken: string;
+  patientsAhead: number;
+  estimatedWaitMinutes: number;
+  status: string;
+  doctorName: string;
+  facilityName: string;
+  slot?: string;
+  appointmentDate?: string;
+}
+
+export interface FacilityQueueStatus {
+  facilityId: string;
+  doctorId?: string;
+  date: string;
+  currentToken: string;
+  inProgressAppointment: any | null;
+  metrics: {
+    total: number;
+    waiting: number;
+    completed: number;
+    cancelled: number;
+  };
+  queueList: Array<{
+    id: string;
+    token: string;
+    slot: string;
+    status: string;
+    patientName: string;
+    patientPhone: string;
+    doctorName: string;
+    type: string;
+  }>;
+}
+

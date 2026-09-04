@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { AppointmentService } from "../services/appointment.service";
 import { prisma } from "../config/prisma";
+import { UserRole } from "@prisma/client";
 
 export class AppointmentController {
   static async list(req: Request, res: Response): Promise<void> {
@@ -9,6 +10,7 @@ export class AppointmentController {
       const doctorId = req.query.doctorId as string | undefined;
       const facilityId = req.query.facilityId as string | undefined;
       const status = req.query.status as any;
+      const date = req.query.date as string | undefined;
       const user = (req as any).user;
 
       let effectivePatientId = patientId;
@@ -27,6 +29,7 @@ export class AppointmentController {
         doctorId: effectiveDoctorId,
         facilityId,
         status,
+        date,
       });
 
       res.json({ success: true, data: appointments });
@@ -49,6 +52,9 @@ export class AppointmentController {
     }
   }
 
+  /**
+   * Book appointment with token generation (FR-14 & FR-15)
+   */
   static async create(req: Request, res: Response): Promise<void> {
     try {
       const user = (req as any).user;
@@ -78,9 +84,146 @@ export class AppointmentController {
         notes: req.body.notes,
       });
 
-      res.status(201).json({ success: true, data: appointment, message: "Appointment booked successfully!" });
+      res.status(201).json({
+        success: true,
+        data: appointment,
+        message: `Appointment Confirmed! Your Token is ${appointment.token}`,
+      });
     } catch (err: any) {
       res.status(500).json({ success: false, message: err.message || "Failed to create appointment." });
+    }
+  }
+
+  /**
+   * Patient Live Queue Status (FR-16)
+   */
+  static async getPatientQueue(req: Request, res: Response): Promise<void> {
+    try {
+      const id = req.params.id as string;
+      const queueStatus = await AppointmentService.getPatientQueueStatus(id);
+      res.json({ success: true, data: queueStatus });
+    } catch (err: any) {
+      res.status(404).json({ success: false, message: err.message || "Failed to get queue status." });
+    }
+  }
+
+  /**
+   * Facility / Doctor OPD Queue Status (FR-16)
+   */
+  static async getFacilityQueue(req: Request, res: Response): Promise<void> {
+    try {
+      const facilityId = req.query.facilityId as string;
+      const doctorId = req.query.doctorId as string | undefined;
+      const date = req.query.date as string | undefined;
+
+      if (!facilityId) {
+        res.status(400).json({ success: false, message: "facilityId is required." });
+        return;
+      }
+
+      const queue = await AppointmentService.getFacilityQueue(facilityId, doctorId, date);
+      res.json({ success: true, data: queue });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message || "Failed to get facility queue." });
+    }
+  }
+
+  /**
+   * Advance Queue — "Call Next Patient" (FR-16)
+   */
+  static async callNextPatient(req: Request, res: Response): Promise<void> {
+    try {
+      const { facilityId, doctorId } = req.body;
+      const user = (req as any).user;
+
+      if (!facilityId) {
+        res.status(400).json({ success: false, message: "facilityId is required." });
+        return;
+      }
+
+      let effectiveDoctorId = doctorId;
+      if (user?.role === UserRole.DOCTOR && !doctorId) {
+        const d = await prisma.doctor.findUnique({ where: { userId: user.id } });
+        if (d) effectiveDoctorId = d.id;
+      }
+
+      const result = await AppointmentService.callNextPatient(facilityId, effectiveDoctorId);
+      res.json({ success: true, data: result, message: result.message });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message || "Failed to advance queue." });
+    }
+  }
+
+  /**
+   * Reschedule appointment (FR-17)
+   */
+  static async reschedule(req: Request, res: Response): Promise<void> {
+    try {
+      const id = req.params.id as string;
+      const { newDate, newSlot, newDoctorId } = req.body;
+
+      if (!newDate || !newSlot) {
+        res.status(400).json({ success: false, message: "newDate and newSlot are required." });
+        return;
+      }
+
+      const updated = await AppointmentService.reschedule(id, {
+        newDate,
+        newSlot,
+        newDoctorId,
+      });
+
+      res.json({
+        success: true,
+        data: updated,
+        message: `Appointment rescheduled successfully! Your new token is ${updated.token}.`,
+      });
+    } catch (err: any) {
+      res.status(400).json({ success: false, message: err.message || "Failed to reschedule appointment." });
+    }
+  }
+
+  /**
+   * Cancel appointment (FR-17)
+   */
+  static async cancel(req: Request, res: Response): Promise<void> {
+    try {
+      const id = req.params.id as string;
+      const { reason } = req.body;
+
+      const cancelled = await AppointmentService.cancel(id, reason);
+      res.json({ success: true, data: cancelled, message: "Appointment cancelled successfully." });
+    } catch (err: any) {
+      res.status(400).json({ success: false, message: err.message || "Failed to cancel appointment." });
+    }
+  }
+
+  /**
+   * Rebook appointment (FR-17)
+   */
+  static async rebook(req: Request, res: Response): Promise<void> {
+    try {
+      const id = req.params.id as string;
+      const { newDate, newSlot, newDoctorId } = req.body;
+
+      if (!newDate || !newSlot) {
+        res.status(400).json({ success: false, message: "newDate and newSlot are required." });
+        return;
+      }
+
+      const newAppt = await AppointmentService.rebook(id, {
+        newDate,
+        newSlot,
+        newDoctorId,
+      });
+
+      res.status(201).json({
+        success: true,
+        data: newAppt,
+        message: `Appointment rebooked successfully! Token: ${newAppt.token}`,
+      });
+    } catch (err: any) {
+      res.status(400).json({ success: false, message: err.message || "Failed to rebook appointment." });
     }
   }
 
@@ -99,9 +242,9 @@ export class AppointmentController {
     try {
       const id = req.params.id as string;
       await AppointmentService.delete(id);
-      res.json({ success: true, message: "Appointment cancelled successfully." });
+      res.json({ success: true, message: "Appointment deleted." });
     } catch (err: any) {
-      res.status(500).json({ success: false, message: err.message || "Failed to cancel appointment." });
+      res.status(500).json({ success: false, message: err.message || "Failed to delete appointment." });
     }
   }
 }

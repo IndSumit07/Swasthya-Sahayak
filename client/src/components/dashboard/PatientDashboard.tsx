@@ -15,6 +15,7 @@ import {
   type Prescription,
   type Referral,
   type DiagnosticReport,
+  type DoctorSearchResult,
 } from "@/lib/api";
 import {
   Calendar,
@@ -33,7 +34,19 @@ import {
   FileText,
   User,
   AlertCircle,
+  Search,
+  Ticket,
+  Printer,
+  RotateCcw,
+  CalendarClock,
+  Sparkles,
+  Stethoscope,
+  ChevronRight,
 } from "lucide-react";
+import { DoctorSearchModal } from "@/components/appointments/DoctorSearchModal";
+import { AppointmentConfirmationModal } from "@/components/appointments/AppointmentConfirmationModal";
+import { LiveQueueTracker } from "@/components/appointments/LiveQueueTracker";
+import { RescheduleModal } from "@/components/appointments/RescheduleModal";
 
 const MAHARASHTRA_DISTRICTS = [
   "Ahmednagar","Akola","Amravati","Aurangabad","Beed","Bhandara","Buldhana","Chandrapur",
@@ -75,12 +88,19 @@ export function PatientDashboard({ user, activeTab, setTab, onRefreshUser }: Pat
   // Appointment Booking Modal State
   const [showApptModal, setShowApptModal] = useState(false);
   const [selectedFacility, setSelectedFacility] = useState("");
+  const [selectedDoctor, setSelectedDoctor] = useState<DoctorSearchResult | null>(null);
   const [apptType, setApptType] = useState<"IN_PERSON" | "TELE_OPD">("IN_PERSON");
   const [appDate, setAppDate] = useState(new Date().toISOString().split("T")[0]);
   const [appSlot, setAppSlot] = useState("10:00 AM - 11:00 AM");
   const [appNotes, setAppNotes] = useState("");
   const [bookingLoading, setBookingLoading] = useState(false);
-  const [bookingSuccess, setBookingSuccess] = useState(false);
+
+  // Module 4 Interactive Modals (FR-13 to FR-17)
+  const [showDocSearch, setShowDocSearch] = useState(false);
+  const [confirmedAppt, setConfirmedAppt] = useState<Appointment | null>(null);
+  const [showConfirmSlip, setShowConfirmSlip] = useState(false);
+  const [activeQueueId, setActiveQueueId] = useState<string | null>(null);
+  const [rescheduleTarget, setRescheduleTarget] = useState<Appointment | null>(null);
 
   // Load Real Data from DB
   const loadDatabaseRecords = async () => {
@@ -146,41 +166,85 @@ export function PatientDashboard({ user, activeTab, setTab, onRefreshUser }: Pat
     }
   };
 
+  const handleSelectDoctorFromSearch = (doc: DoctorSearchResult) => {
+    setSelectedDoctor(doc);
+    if (doc.facilityId) {
+      setSelectedFacility(doc.facilityId);
+    }
+    setShowDocSearch(false);
+    setShowApptModal(true);
+  };
+
   const handleBookAppointment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedFacility || !appDate) return;
     setBookingLoading(true);
     try {
-      await appointmentsApi.create({
+      const res = await appointmentsApi.create({
         patientId: patient?.id,
         facilityId: selectedFacility,
+        doctorId: selectedDoctor?.id || undefined,
         type: apptType,
         appointmentDate: appDate,
         slot: appSlot,
         notes: appNotes,
       });
-      setBookingSuccess(true);
-      await loadDatabaseRecords();
-      setTimeout(() => {
+      if (res.success && res.data) {
         setShowApptModal(false);
-        setBookingSuccess(false);
+        setConfirmedAppt(res.data);
+        setShowConfirmSlip(true);
+        setSelectedDoctor(null);
         setAppNotes("");
-      }, 1200);
+        await loadDatabaseRecords();
+      }
     } catch (err: any) {
-      alert(err.message || "Failed to book appointment.");
+      alert(err.message || "Failed to book appointment slot.");
     } finally {
       setBookingLoading(false);
     }
   };
 
   const handleCancelAppointment = async (id: string) => {
-    if (!confirm("Are you sure you want to cancel this appointment?")) return;
+    const reason = window.prompt("Reason for cancelling appointment (optional):", "Personal schedule adjustment");
+    if (reason === null) return;
     try {
-      await appointmentsApi.updateStatus(id, "CANCELLED");
+      await appointmentsApi.cancel(id, reason || "Patient requested cancellation");
       await loadDatabaseRecords();
     } catch (err: any) {
       alert(err.message || "Failed to cancel appointment.");
     }
+  };
+
+  const handleRebookAppointment = (appt: Appointment) => {
+    setSelectedFacility(appt.facilityId);
+    if (appt.doctor) {
+      setSelectedDoctor({
+        id: appt.doctor.id,
+        userId: appt.doctor.id,
+        specialty: appt.doctor.specialty || "General Medicine",
+        qualification: null,
+        registrationNo: appt.doctor.registrationNo || null,
+        isAvailable: true,
+        user: {
+          id: appt.doctor.id,
+          fullName: appt.doctor.user?.fullName || "Specialist Doctor",
+          email: "",
+          phone: null,
+          avatarUrl: null,
+        },
+        facilityId: appt.facilityId,
+        facility: {
+          id: appt.facilityId,
+          name: appt.facility?.name || "Healthcare Facility",
+          type: "PHC",
+          district: appt.facility?.district || "Maharashtra",
+          village: null,
+          contactPhone: null,
+          workingHours: null,
+        },
+      });
+    }
+    setShowApptModal(true);
   };
 
   return (
@@ -216,20 +280,27 @@ export function PatientDashboard({ user, activeTab, setTab, onRefreshUser }: Pat
                   </div>
                 </div>
               </div>
-              <div className="flex flex-col gap-2.5 shrink-0">
+              <div className="flex flex-col sm:flex-row md:flex-col gap-2.5 shrink-0">
+                <button
+                  onClick={() => setShowDocSearch(true)}
+                  className="px-5 py-3 rounded-2xl bg-[#E5F973] text-[#0E4A43] font-black text-sm hover:brightness-105 active:scale-95 transition-all shadow-md flex items-center justify-center gap-2"
+                >
+                  <Search className="w-4 h-4" />
+                  Find Specialist Doctor (FR-13)
+                </button>
                 <button
                   onClick={() => setShowApptModal(true)}
-                  className="px-5 py-3 rounded-2xl bg-[#E5F973] text-[#0E4A43] font-black text-sm hover:brightness-105 active:scale-95 transition-all shadow-md flex items-center justify-center gap-2"
+                  className="px-5 py-3 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-bold text-sm border border-white/20 transition-all flex items-center justify-center gap-2"
                 >
                   <Plus className="w-4 h-4" />
                   Book OPD Appointment
                 </button>
                 <Link
                   href="/facilities"
-                  className="px-5 py-3 rounded-2xl bg-white/10 hover:bg-white/15 text-white font-bold text-sm border border-white/15 transition-all text-center flex items-center justify-center gap-2"
+                  className="px-5 py-3 rounded-2xl bg-white/5 hover:bg-white/10 text-slate-200 font-bold text-xs border border-white/10 transition-all text-center flex items-center justify-center gap-2"
                 >
-                  <Building2 className="w-4 h-4" />
-                  Find Nearby Facilities &amp; Beds
+                  <Building2 className="w-3.5 h-3.5" />
+                  Find Facilities &amp; Beds
                 </Link>
               </div>
             </div>
@@ -322,33 +393,70 @@ export function PatientDashboard({ user, activeTab, setTab, onRefreshUser }: Pat
                     className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs space-y-4 relative overflow-hidden"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="px-3 py-1 rounded-full text-xs font-black uppercase bg-emerald-100 text-emerald-800">
+                      <span className={`px-3 py-1 rounded-full text-xs font-black uppercase ${
+                        appt.status === "COMPLETED" ? "bg-blue-100 text-blue-800" :
+                        appt.status === "IN_PROGRESS" ? "bg-amber-100 text-amber-800 animate-pulse" :
+                        appt.status === "CANCELLED" ? "bg-red-100 text-red-800" :
+                        "bg-emerald-100 text-emerald-800"
+                      }`}>
                         {appt.status}
                       </span>
-                      <span className="font-mono text-xs font-bold text-slate-400">{appt.token || "Queue Token Pending"}</span>
+                      <span className="px-3 py-1 rounded-xl bg-slate-100 border border-slate-200 font-mono text-xs font-black text-[#0E4A43]">
+                        Token: {appt.token || "Pending"}
+                      </span>
                     </div>
                     <div>
                       <h3 className="font-black text-slate-900 text-base">{appt.facility?.name || "Facility Appointment"}</h3>
-                      <p className="text-xs text-slate-500">{appt.doctor ? `Dr. ${appt.doctor.user?.fullName}` : "Medical Officer Duty Officer"}</p>
+                      <p className="text-xs text-slate-500 font-medium">
+                        {appt.doctor ? `Dr. ${appt.doctor.user?.fullName} (${appt.doctor.specialty || "Medical Officer"})` : "Duty Medical Officer"}
+                      </p>
                     </div>
                     <div className="p-3 bg-[#EFF2F5] rounded-2xl flex items-center justify-between text-xs font-bold text-slate-700">
                       <span>Type: <strong className="text-slate-900">{appt.type === "TELE_OPD" ? "Virtual Tele-OPD" : "In-Person OPD"}</strong></span>
                       <span>Date: <strong className="text-[#0E4A43]">{new Date(appt.appointmentDate).toLocaleDateString()} ({appt.slot})</strong></span>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <Link
-                        href={`/facilities/${appt.facilityId}`}
-                        className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs text-center transition-colors flex items-center justify-center gap-1.5"
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <button
+                        onClick={() => setActiveQueueId(appt.id)}
+                        className="flex-1 py-2 px-3 rounded-xl bg-emerald-50 text-emerald-800 hover:bg-emerald-100 font-bold text-xs transition-colors flex items-center justify-center gap-1.5"
                       >
-                        <Building2 className="w-3.5 h-3.5" />
-                        <span>Facility Route &amp; Beds</span>
-                      </Link>
-                      {appt.status !== "CANCELLED" && (
+                        <Clock className="w-3.5 h-3.5" />
+                        <span>Track Queue</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setConfirmedAppt(appt);
+                          setShowConfirmSlip(true);
+                        }}
+                        className="py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs transition-colors flex items-center justify-center gap-1.5"
+                        title="Print Token Slip"
+                      >
+                        <Ticket className="w-3.5 h-3.5" />
+                        <span>Slip</span>
+                      </button>
+                      {appt.status !== "CANCELLED" && appt.status !== "COMPLETED" ? (
+                        <>
+                          <button
+                            onClick={() => setRescheduleTarget(appt)}
+                            className="py-2 px-3 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-xs transition-colors flex items-center gap-1"
+                          >
+                            <CalendarClock className="w-3.5 h-3.5" />
+                            <span>Reschedule</span>
+                          </button>
+                          <button
+                            onClick={() => handleCancelAppointment(appt.id)}
+                            className="py-2 px-3 rounded-xl border border-red-200 text-red-700 hover:bg-red-50 font-bold text-xs transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
                         <button
-                          onClick={() => handleCancelAppointment(appt.id)}
-                          className="px-3 py-2.5 rounded-xl border border-red-200 text-red-700 hover:bg-red-50 font-bold text-xs transition-colors"
+                          onClick={() => handleRebookAppointment(appt)}
+                          className="py-2 px-3 rounded-xl bg-[#0E4A43] text-white hover:brightness-110 font-bold text-xs transition-colors flex items-center gap-1"
                         >
-                          Cancel
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span>Rebook</span>
                         </button>
                       )}
                     </div>
@@ -363,18 +471,27 @@ export function PatientDashboard({ user, activeTab, setTab, onRefreshUser }: Pat
       {/* ─── APPOINTMENTS TAB ─────────────────────────────────────────────────── */}
       {activeTab === "appointments" && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <h2 className="text-xl font-black text-slate-900">OPD Appointments &amp; Virtual Teleconsultations</h2>
               <p className="text-xs text-slate-500">Live tokens and scheduled consultations across Maharashtra facilities</p>
             </div>
-            <button
-              onClick={() => setShowApptModal(true)}
-              className="px-4 py-2.5 rounded-xl bg-[#0E4A43] text-white font-bold text-xs hover:brightness-110 transition-all flex items-center gap-2 shadow-xs"
-            >
-              <Plus className="w-4 h-4" />
-              Book New Appointment
-            </button>
+            <div className="flex items-center gap-2.5">
+              <button
+                onClick={() => setShowDocSearch(true)}
+                className="px-4 py-2.5 rounded-xl bg-[#E5F973] text-[#0E4A43] font-black text-xs hover:brightness-105 transition-all flex items-center gap-2 shadow-xs"
+              >
+                <Search className="w-4 h-4" />
+                Find Specialist (FR-13)
+              </button>
+              <button
+                onClick={() => setShowApptModal(true)}
+                className="px-4 py-2.5 rounded-xl bg-[#0E4A43] text-white font-bold text-xs hover:brightness-110 transition-all flex items-center gap-2 shadow-xs"
+              >
+                <Plus className="w-4 h-4" />
+                Book Slot
+              </button>
+            </div>
           </div>
 
           {loadingData ? (
@@ -390,6 +507,20 @@ export function PatientDashboard({ user, activeTab, setTab, onRefreshUser }: Pat
               <p className="text-xs text-slate-500 max-w-sm mx-auto">
                 No active or past appointments recorded for your profile. Book a slot at your local PHC or District Hospital.
               </p>
+              <div className="flex items-center justify-center gap-3 pt-2">
+                <button
+                  onClick={() => setShowDocSearch(true)}
+                  className="px-4 py-2 rounded-xl bg-[#E5F973] text-[#0E4A43] text-xs font-black hover:brightness-105"
+                >
+                  Search Specialist Doctors
+                </button>
+                <button
+                  onClick={() => setShowApptModal(true)}
+                  className="px-4 py-2 bg-[#0E4A43] text-white rounded-xl text-xs font-bold hover:brightness-110"
+                >
+                  Book Appointment Now
+                </button>
+              </div>
             </div>
           ) : (
             <div className="space-y-4">
@@ -398,35 +529,75 @@ export function PatientDashboard({ user, activeTab, setTab, onRefreshUser }: Pat
                   key={appt.id}
                   className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4"
                 >
-                  <div className="space-y-1">
+                  <div className="space-y-1.5">
                     <div className="flex items-center gap-2">
-                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase bg-emerald-100 text-emerald-800">
+                      <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase ${
+                        appt.status === "COMPLETED" ? "bg-blue-100 text-blue-800" :
+                        appt.status === "IN_PROGRESS" ? "bg-amber-100 text-amber-800 animate-pulse" :
+                        appt.status === "CANCELLED" ? "bg-red-100 text-red-800" :
+                        "bg-emerald-100 text-emerald-800"
+                      }`}>
                         {appt.status}
                       </span>
-                      <span className="text-xs font-bold text-slate-400 font-mono">{appt.token || "Queue Token Pending"}</span>
+                      <span className="px-3 py-1 rounded-xl bg-[#EFF2F5] text-slate-800 font-mono text-xs font-black border border-slate-200">
+                        Token: {appt.token || "Queue Pending"}
+                      </span>
+                      <span className="text-xs font-bold text-slate-400">
+                        &bull; {appt.type === "TELE_OPD" ? "Virtual Video" : "In-Person OPD"}
+                      </span>
                     </div>
-                    <h3 className="font-black text-slate-900 text-base">{appt.facility?.name || "Facility Appointment"}</h3>
-                    <p className="text-xs text-slate-500">
-                      {appt.doctor ? `Assigned Doctor: Dr. ${appt.doctor.user?.fullName}` : "General Medical Officer"} &bull; {appt.type === "TELE_OPD" ? "Virtual Tele-OPD Video" : "In-Person Consultation"}
+                    <h3 className="font-black text-slate-900 text-base">{appt.facility?.name || "Facility Consultation"}</h3>
+                    <p className="text-xs text-slate-600 font-medium">
+                      {appt.doctor ? `Doctor: Dr. ${appt.doctor.user?.fullName} (${appt.doctor.specialty || "Specialist"})` : "General OPD Physician"}
                     </p>
                     <p className="text-xs font-bold text-[#0E4A43]">
-                      Scheduled: {new Date(appt.appointmentDate).toLocaleDateString()} ({appt.slot})
+                      Scheduled: {new Date(appt.appointmentDate).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" })} &bull; Slot: {appt.slot}
                     </p>
+                    {appt.notes && (
+                      <p className="text-[11px] text-slate-500 italic">Notes: {appt.notes}</p>
+                    )}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Link
-                      href={`/facilities/${appt.facilityId}`}
-                      className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs transition-colors flex items-center gap-1.5"
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={() => setActiveQueueId(appt.id)}
+                      className="px-3.5 py-2 rounded-xl bg-emerald-50 text-emerald-800 hover:bg-emerald-100 font-bold text-xs transition-colors flex items-center gap-1.5"
                     >
-                      <Building2 className="w-3.5 h-3.5" />
-                      <span>View Facility</span>
-                    </Link>
-                    {appt.status !== "CANCELLED" && (
+                      <Clock className="w-3.5 h-3.5" />
+                      <span>Live Queue</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setConfirmedAppt(appt);
+                        setShowConfirmSlip(true);
+                      }}
+                      className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs transition-colors flex items-center gap-1.5"
+                    >
+                      <Ticket className="w-3.5 h-3.5" />
+                      <span>Slip</span>
+                    </button>
+                    {appt.status !== "CANCELLED" && appt.status !== "COMPLETED" ? (
+                      <>
+                        <button
+                          onClick={() => setRescheduleTarget(appt)}
+                          className="px-3.5 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-xs transition-colors flex items-center gap-1.5"
+                        >
+                          <CalendarClock className="w-3.5 h-3.5" />
+                          <span>Reschedule</span>
+                        </button>
+                        <button
+                          onClick={() => handleCancelAppointment(appt.id)}
+                          className="px-3.5 py-2 rounded-xl border border-red-200 text-red-700 hover:bg-red-50 font-bold text-xs transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
                       <button
-                        onClick={() => handleCancelAppointment(appt.id)}
-                        className="px-4 py-2 rounded-xl border border-red-200 text-red-700 hover:bg-red-50 font-bold text-xs transition-colors"
+                        onClick={() => handleRebookAppointment(appt)}
+                        className="px-3.5 py-2 rounded-xl bg-[#0E4A43] text-white hover:brightness-110 font-bold text-xs transition-colors flex items-center gap-1.5"
                       >
-                        Cancel Slot
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>Rebook Slot</span>
                       </button>
                     )}
                   </div>
@@ -760,114 +931,209 @@ export function PatientDashboard({ user, activeTab, setTab, onRefreshUser }: Pat
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="font-black text-lg text-slate-900">Book OPD Appointment / Teleconsult</h3>
-                <p className="text-xs text-slate-500">Select facility and preferred consultation mode</p>
+                <p className="text-xs text-slate-500">Select facility, doctor, and preferred consultation slot</p>
               </div>
               <button
-                onClick={() => setShowApptModal(false)}
+                onClick={() => {
+                  setShowApptModal(false);
+                  setSelectedDoctor(null);
+                }}
                 className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center font-bold"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            {bookingSuccess ? (
-              <div className="p-8 text-center space-y-3 bg-emerald-50 rounded-2xl border border-emerald-200">
-                <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center mx-auto">
-                  <Check className="w-6 h-6" />
+            {/* Selected Specialist Doctor Banner */}
+            {selectedDoctor ? (
+              <div className="p-3.5 bg-emerald-50 rounded-2xl border border-emerald-200 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-[#0E4A43] text-white flex items-center justify-center shrink-0">
+                    <Stethoscope className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="font-black text-slate-900 text-xs">
+                      Dr. {selectedDoctor.user?.fullName}
+                    </div>
+                    <div className="text-[11px] text-emerald-800 font-bold">
+                      {selectedDoctor.specialty || "Specialist"} &bull; {selectedDoctor.facility?.name}
+                    </div>
+                  </div>
                 </div>
-                <h4 className="font-black text-slate-900 text-base">Appointment Booked!</h4>
-                <p className="text-xs text-slate-600">Your slot is confirmed and synced with the hospital queue.</p>
+                <button
+                  type="button"
+                  onClick={() => setSelectedDoctor(null)}
+                  className="text-[11px] font-bold text-red-600 hover:underline shrink-0"
+                >
+                  Change
+                </button>
               </div>
             ) : (
-              <form onSubmit={handleBookAppointment} className="space-y-4 text-xs">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Select Facility</label>
-                  <select
-                    value={selectedFacility}
-                    onChange={(e) => setSelectedFacility(e.target.value)}
-                    required
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-[#0E4A43] font-bold bg-white text-xs"
-                  >
-                    {facilities.map((fac) => (
-                      <option key={fac.id} value={fac.id}>
-                        {fac.name} ({fac.district} - {fac.type})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">Consultation Mode</label>
-                    <select
-                      value={apptType}
-                      onChange={(e) => setApptType(e.target.value as any)}
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-[#0E4A43] font-bold bg-white text-xs"
-                    >
-                      <option value="IN_PERSON">In-Person OPD</option>
-                      <option value="TELE_OPD">Virtual Tele-OPD</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">Appointment Date</label>
-                    <input
-                      type="date"
-                      value={appDate}
-                      onChange={(e) => setAppDate(e.target.value)}
-                      required
-                      min={new Date().toISOString().split("T")[0]}
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-[#0E4A43] font-bold text-xs"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Time Slot</label>
-                  <select
-                    value={appSlot}
-                    onChange={(e) => setAppSlot(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-[#0E4A43] font-bold bg-white text-xs"
-                  >
-                    <option value="09:00 AM - 10:00 AM">09:00 AM - 10:00 AM</option>
-                    <option value="10:00 AM - 11:00 AM">10:00 AM - 11:00 AM</option>
-                    <option value="11:00 AM - 12:00 PM">11:00 AM - 12:00 PM</option>
-                    <option value="02:00 PM - 03:00 PM">02:00 PM - 03:00 PM</option>
-                    <option value="03:00 PM - 04:00 PM">03:00 PM - 04:00 PM</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Reason for Visit / Symptoms (Optional)</label>
-                  <textarea
-                    rows={2}
-                    placeholder="e.g. Seasonal cough, fever, follow-up blood pressure check"
-                    value={appNotes}
-                    onChange={(e) => setAppNotes(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-[#0E4A43] font-medium text-xs"
-                  />
-                </div>
-
-                <div className="pt-2 flex justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowApptModal(false)}
-                    className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 font-bold hover:bg-slate-200"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={bookingLoading}
-                    className="px-6 py-2.5 rounded-xl bg-[#0E4A43] text-white font-bold hover:brightness-110 disabled:opacity-50 shadow-md"
-                  >
-                    {bookingLoading ? "Confirming Slot..." : "Confirm Booking"}
-                  </button>
-                </div>
-              </form>
+              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-center justify-between">
+                <span className="text-xs font-medium text-slate-600">Looking for a specific specialist?</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowApptModal(false);
+                    setShowDocSearch(true);
+                  }}
+                  className="text-xs font-black text-[#0E4A43] hover:underline flex items-center gap-1"
+                >
+                  <Search className="w-3.5 h-3.5" />
+                  Search Doctors (FR-13)
+                </button>
+              </div>
             )}
+
+            <form onSubmit={handleBookAppointment} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Select Facility</label>
+                <select
+                  value={selectedFacility}
+                  onChange={(e) => setSelectedFacility(e.target.value)}
+                  required
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-[#0E4A43] font-bold bg-white text-xs"
+                >
+                  {facilities.map((fac) => (
+                    <option key={fac.id} value={fac.id}>
+                      {fac.name} ({fac.district} - {fac.type})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Consultation Mode</label>
+                  <select
+                    value={apptType}
+                    onChange={(e) => setApptType(e.target.value as any)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-[#0E4A43] font-bold bg-white text-xs"
+                  >
+                    <option value="IN_PERSON">In-Person OPD</option>
+                    <option value="TELE_OPD">Virtual Tele-OPD</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Appointment Date</label>
+                  <input
+                    type="date"
+                    value={appDate}
+                    onChange={(e) => setAppDate(e.target.value)}
+                    required
+                    min={new Date().toISOString().split("T")[0]}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-[#0E4A43] font-bold text-xs"
+                  >
+                  </input>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Time Slot (FR-14)</label>
+                <select
+                  value={appSlot}
+                  onChange={(e) => setAppSlot(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-[#0E4A43] font-bold bg-white text-xs"
+                >
+                  <option value="Morning Slot 1 (09:00 AM - 10:00 AM)">Morning Slot 1 (09:00 AM - 10:00 AM)</option>
+                  <option value="Morning Slot 2 (10:00 AM - 11:00 AM)">Morning Slot 2 (10:00 AM - 11:00 AM)</option>
+                  <option value="Morning Slot 3 (11:00 AM - 12:00 PM)">Morning Slot 3 (11:00 AM - 12:00 PM)</option>
+                  <option value="Afternoon Slot 1 (01:00 PM - 02:00 PM)">Afternoon Slot 1 (01:00 PM - 02:00 PM)</option>
+                  <option value="Afternoon Slot 2 (02:00 PM - 03:00 PM)">Afternoon Slot 2 (02:00 PM - 03:00 PM)</option>
+                  <option value="Evening Slot (05:00 PM - 06:00 PM)">Evening Slot (05:00 PM - 06:00 PM)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Reason for Visit / Symptoms (Optional)</label>
+                <textarea
+                  rows={2}
+                  placeholder="e.g. Seasonal cough, fever, follow-up blood pressure check"
+                  value={appNotes}
+                  onChange={(e) => setAppNotes(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-[#0E4A43] font-medium text-xs"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowApptModal(false);
+                    setSelectedDoctor(null);
+                  }}
+                  className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 font-bold hover:bg-slate-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={bookingLoading}
+                  className="px-6 py-2.5 rounded-xl bg-[#0E4A43] text-white font-bold hover:brightness-110 disabled:opacity-50 shadow-md flex items-center gap-2"
+                >
+                  {bookingLoading ? (
+                    <span>Allocating Token...</span>
+                  ) : (
+                    <>
+                      <Ticket className="w-3.5 h-3.5" />
+                      <span>Confirm &amp; Generate Token</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
+
+      {/* ─── MODULE 4: DOCTOR SEARCH MODAL (FR-13) ─────────────────────────── */}
+      <DoctorSearchModal
+        isOpen={showDocSearch}
+        onClose={() => setShowDocSearch(false)}
+        onSelectDoctor={handleSelectDoctorFromSearch}
+        initialDistrict={patient?.district || "Pune"}
+      />
+
+      {/* ─── MODULE 4: APPOINTMENT CONFIRMATION SLIP (FR-15) ─────────────────── */}
+      <AppointmentConfirmationModal
+        isOpen={showConfirmSlip}
+        onClose={() => setShowConfirmSlip(false)}
+        appointment={confirmedAppt}
+        onTrackQueue={(id) => {
+          setShowConfirmSlip(false);
+          setActiveQueueId(id);
+        }}
+      />
+
+      {/* ─── MODULE 4: DIGITAL QUEUE TRACKER MODAL (FR-16) ───────────────────── */}
+      {activeQueueId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-xl w-full shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto">
+            <LiveQueueTracker
+              appointmentId={activeQueueId}
+              onClose={() => setActiveQueueId(null)}
+              onReschedule={(id) => {
+                const match = appointments.find((a) => a.id === id);
+                if (match) {
+                  setActiveQueueId(null);
+                  setRescheduleTarget(match);
+                }
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ─── MODULE 4: RESCHEDULE MODAL (FR-17) ──────────────────────────────── */}
+      <RescheduleModal
+        isOpen={!!rescheduleTarget}
+        onClose={() => setRescheduleTarget(null)}
+        appointment={rescheduleTarget}
+        onSuccess={() => {
+          setRescheduleTarget(null);
+          loadDatabaseRecords();
+        }}
+      />
     </div>
   );
 }

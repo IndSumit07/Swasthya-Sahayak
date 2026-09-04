@@ -29,6 +29,11 @@ import {
   User,
   Activity,
   AlertCircle,
+  Ticket,
+  Volume2,
+  ArrowRight,
+  Sparkles,
+  RotateCw,
 } from "lucide-react";
 
 interface DoctorDashboardProps {
@@ -45,6 +50,10 @@ export function DoctorDashboard({ user, activeTab, setTab }: DoctorDashboardProp
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Queue Switchboard State (FR-16)
+  const [callingNext, setCallingNext] = useState(false);
+  const [callNotice, setCallNotice] = useState<string | null>(null);
 
   // E-Prescription Form State
   const [rxAppointmentId, setRxAppointmentId] = useState("");
@@ -76,6 +85,37 @@ export function DoctorDashboard({ user, activeTab, setTab }: DoctorDashboardProp
 
   // Active Video Modal
   const [activeCallAppt, setActiveCallAppt] = useState<Appointment | null>(null);
+
+  const handleCallNextPatient = async () => {
+    if (!doctor?.facilityId) {
+      alert("Doctor facility ID not available.");
+      return;
+    }
+    setCallingNext(true);
+    try {
+      const res = await appointmentsApi.callNextPatient({
+        facilityId: doctor.facilityId,
+        doctorId: doctor.id,
+      });
+      if (res.success && res.data) {
+        const cur = res.data.currentAppointment;
+        if (cur) {
+          setCallNotice(`Now Calling Token ${cur.token || "Next"}: ${cur.patient?.user?.fullName || "Citizen"}`);
+          setRxAppointmentId(cur.id);
+          setRxPatientId(cur.patientId);
+          setRxPatientName(cur.patient?.user?.fullName || "Patient");
+        } else {
+          setCallNotice("Queue complete: No remaining patients waiting for this OPD shift.");
+        }
+        await loadDoctorData();
+        setTimeout(() => setCallNotice(null), 8000);
+      }
+    } catch (err: any) {
+      alert(err.message || "Failed to advance queue.");
+    } finally {
+      setCallingNext(false);
+    }
+  };
 
   const loadDoctorData = async () => {
     setLoading(true);
@@ -229,7 +269,10 @@ export function DoctorDashboard({ user, activeTab, setTab }: DoctorDashboardProp
     setRxMedicines(updated);
   };
 
+  const inProgressAppt = appointments.find((a) => a.status === "IN_PROGRESS");
   const pendingQueue = appointments.filter((a) => a.status !== "COMPLETED" && a.status !== "CANCELLED");
+  const waitingPatients = pendingQueue.filter((a) => a.status !== "IN_PROGRESS");
+  const nextWaitingAppt = waitingPatients[0] || null;
 
   return (
     <div className="space-y-6 max-w-6xl">
@@ -371,87 +414,240 @@ export function DoctorDashboard({ user, activeTab, setTab }: DoctorDashboardProp
       {/* ─── TELE-OPD QUEUE TAB ───────────────────────────────────────────────── */}
       {activeTab === "queue" && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h2 className="text-xl font-black text-slate-900">Tele-OPD &amp; In-Person Consultation Queue</h2>
-              <p className="text-xs text-slate-500">Live queue connected to Maharashtra PHC reception desks and ASHA worker tablets</p>
+              <h2 className="text-xl font-black text-slate-900">Digital OPD Queue &amp; Consultation Desk</h2>
+              <p className="text-xs text-slate-500">Live token sequence synced with patient app, reception kiosks, and ASHA field tablets</p>
             </div>
             <button
               onClick={loadDoctorData}
-              className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs"
+              className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs flex items-center gap-1.5 self-start sm:self-auto"
             >
-              Refresh Queue
+              <RotateCw className="w-3.5 h-3.5" />
+              <span>Refresh Queue</span>
             </button>
           </div>
 
+          {/* Real-time Call Notice Banner */}
+          {callNotice && (
+            <div className="p-4 rounded-2xl bg-[#0E4A43] text-[#E5F973] border border-[#E5F973]/30 flex items-center justify-between shadow-lg animate-fade-in">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-[#E5F973]/20 flex items-center justify-center text-[#E5F973]">
+                  <Volume2 className="w-5 h-5 animate-bounce" />
+                </div>
+                <div>
+                  <div className="text-xs font-black uppercase tracking-wider text-emerald-300">OPD Announcement Broadcast</div>
+                  <div className="text-sm font-bold text-white">{callNotice}</div>
+                </div>
+              </div>
+              <button
+                onClick={() => setCallNotice(null)}
+                className="text-white/60 hover:text-white text-xs font-bold"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          {/* ─── DIGITAL QUEUE SWITCHBOARD (FR-16) ────────────────────────────── */}
+          <div className="bg-white rounded-3xl p-6 sm:p-7 border border-slate-200/90 shadow-sm space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+              <div className="space-y-1">
+                <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-black uppercase">
+                  <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" />
+                  Live OPD Counter Switchboard (FR-16)
+                </div>
+                <h3 className="text-base font-black text-slate-900">Doctor Queue Controller</h3>
+              </div>
+              <button
+                onClick={handleCallNextPatient}
+                disabled={callingNext || waitingPatients.length === 0}
+                className="px-6 py-3 rounded-2xl bg-[#0E4A43] hover:brightness-110 disabled:opacity-50 text-white font-black text-xs transition-all shadow-md flex items-center justify-center gap-2"
+              >
+                {callingNext ? (
+                  <>
+                    <RotateCw className="w-4 h-4 animate-spin" />
+                    <span>Advancing Queue...</span>
+                  </>
+                ) : (
+                  <>
+                    <Volume2 className="w-4 h-4 text-[#E5F973]" />
+                    <span>Call Next Patient ({waitingPatients.length} Waiting)</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* 3-Column Token Status Display */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Box 1: Currently Calling / In Consultation */}
+              <div className="p-5 rounded-2xl bg-[#0E4A43] text-white space-y-3 relative overflow-hidden">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-emerald-200 uppercase tracking-wider text-[11px]">Now Consulting</span>
+                  <span className="w-2 h-2 rounded-full bg-[#E5F973] animate-ping" />
+                </div>
+                <div>
+                  <div className="text-3xl font-black font-mono text-[#E5F973]">
+                    {inProgressAppt?.token || "None Active"}
+                  </div>
+                  <div className="text-xs font-bold text-white mt-1">
+                    {inProgressAppt?.patient?.user?.fullName || "Awaiting next call"}
+                  </div>
+                  <div className="text-[11px] text-slate-300">
+                    {inProgressAppt ? `${inProgressAppt.type === "TELE_OPD" ? "Virtual Tele-OPD" : "In-Person"} • ${inProgressAppt.slot}` : "Press 'Call Next Patient' to begin"}
+                  </div>
+                </div>
+                {inProgressAppt && (
+                  <button
+                    onClick={() => {
+                      setRxAppointmentId(inProgressAppt.id);
+                      setRxPatientId(inProgressAppt.patientId);
+                      setRxPatientName(inProgressAppt.patient?.user?.fullName || "Patient");
+                      setTab("prescribe");
+                    }}
+                    className="w-full py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
+                  >
+                    <Pill className="w-3.5 h-3.5 text-[#E5F973]" />
+                    <span>Issue Prescription</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Box 2: Next in Queue */}
+              <div className="p-5 rounded-2xl bg-amber-50 border border-amber-200/80 space-y-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-amber-900 uppercase tracking-wider text-[11px]">Next in Line</span>
+                  <Ticket className="w-4 h-4 text-amber-700" />
+                </div>
+                <div>
+                  <div className="text-3xl font-black font-mono text-amber-950">
+                    {nextWaitingAppt?.token || "Queue Empty"}
+                  </div>
+                  <div className="text-xs font-bold text-slate-900 mt-1">
+                    {nextWaitingAppt?.patient?.user?.fullName || "No patient waiting"}
+                  </div>
+                  <div className="text-[11px] text-slate-500">
+                    {nextWaitingAppt ? `${nextWaitingAppt.type === "TELE_OPD" ? "Tele-OPD" : "In-Person"} • ${nextWaitingAppt.slot}` : "No more pending slots"}
+                  </div>
+                </div>
+              </div>
+
+              {/* Box 3: Shift Metrics */}
+              <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
+                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider text-[11px]">OPD Shift Metrics</div>
+                <div className="space-y-1.5 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-600">Waiting Patients:</span>
+                    <strong className="text-slate-900 font-mono text-sm">{waitingPatients.length}</strong>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-600">Completed Today:</span>
+                    <strong className="text-emerald-700 font-mono text-sm">
+                      {appointments.filter((a) => a.status === "COMPLETED").length}
+                    </strong>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-600">Estimated Total Wait:</span>
+                    <strong className="text-[#0E4A43] font-mono text-sm">{waitingPatients.length * 5} min</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Queue List Cards */}
           {loading ? (
             <div className="p-8 text-center bg-white rounded-3xl border border-slate-200 text-xs font-bold text-slate-400">
-              Loading queue...
+              Loading live queue...
             </div>
           ) : pendingQueue.length === 0 ? (
             <div className="p-12 text-center bg-white rounded-3xl border border-slate-200/80 space-y-3">
-              <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto text-slate-600">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center mx-auto">
                 <Check className="w-6 h-6" />
               </div>
-              <div className="text-slate-900 font-bold text-base">Queue is Clear</div>
+              <div className="text-slate-900 font-bold text-base">OPD Queue is Clear</div>
               <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                No active patients waiting for consultation. Patients booked online or referred by ASHA workers will appear here in real-time.
+                No active patients waiting for consultation. Any new slot booked by patients or referred by ASHA health workers will appear here automatically.
               </p>
             </div>
           ) : (
             <div className="space-y-3">
-              {pendingQueue.map((appt) => (
-                <div
-                  key={appt.id}
-                  className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs"
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono font-bold text-slate-400">{appt.token || "Queue Token Pending"}</span>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-100 text-emerald-800">
-                        {appt.type === "TELE_OPD" ? "Virtual Video" : "In-Person OPD"}
-                      </span>
+              {pendingQueue.map((appt) => {
+                const isInProgress = appt.status === "IN_PROGRESS";
+                return (
+                  <div
+                    key={appt.id}
+                    className={`rounded-3xl p-6 border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs ${
+                      isInProgress
+                        ? "bg-emerald-50/40 border-emerald-500 shadow-sm ring-1 ring-emerald-500/30"
+                        : "bg-white border-slate-200/80 shadow-xs"
+                    }`}
+                  >
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="px-3 py-1 rounded-xl bg-[#0E4A43] text-[#E5F973] font-mono font-black text-xs shadow-xs">
+                          Token: {appt.token || "Pending"}
+                        </span>
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                          isInProgress
+                            ? "bg-emerald-600 text-white animate-pulse"
+                            : "bg-slate-100 text-slate-700"
+                        }`}>
+                          {isInProgress ? "In Consultation" : appt.status}
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-100 text-emerald-800">
+                          {appt.type === "TELE_OPD" ? "Virtual Video" : "In-Person OPD"}
+                        </span>
+                      </div>
+                      <h3 className="text-base font-black text-slate-900">
+                        {appt.patient?.user?.fullName || "Citizen Patient"}
+                      </h3>
+                      <p className="text-slate-500 font-medium">
+                        Slot: {appt.slot} &bull; Date: {new Date(appt.appointmentDate).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}
+                      </p>
+                      {appt.notes && (
+                        <p className="text-slate-600 font-medium bg-slate-50 p-2 rounded-xl border border-slate-100">
+                          Symptoms / Reason: {appt.notes}
+                        </p>
+                      )}
                     </div>
-                    <h3 className="text-base font-black text-slate-900">{appt.patient?.user?.fullName || "Citizen Patient"}</h3>
-                    <p className="text-slate-500">Slot: {appt.slot} &bull; Date: {new Date(appt.appointmentDate).toLocaleDateString()}</p>
-                    {appt.notes && <p className="text-slate-600 font-medium">Symptoms / Reason: {appt.notes}</p>}
-                  </div>
 
-                  <div className="flex items-center gap-2">
-                    {appt.type === "TELE_OPD" && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      {appt.type === "TELE_OPD" && (
+                        <button
+                          onClick={() => setActiveCallAppt(appt)}
+                          className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs"
+                        >
+                          <Video className="w-3.5 h-3.5" />
+                          <span>Launch Video Call</span>
+                        </button>
+                      )}
                       <button
-                        onClick={() => setActiveCallAppt(appt)}
-                        className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs"
+                        onClick={() => {
+                          setRxAppointmentId(appt.id);
+                          setRxPatientId(appt.patientId);
+                          setRxPatientName(appt.patient?.user?.fullName || "Patient");
+                          setTab("prescribe");
+                        }}
+                        className="px-4 py-2.5 rounded-xl bg-[#0E4A43] hover:brightness-110 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs"
                       >
-                        <Video className="w-3.5 h-3.5" />
-                        <span>Launch Video Call</span>
+                        <Pill className="w-3.5 h-3.5" />
+                        <span>Issue E-Rx</span>
                       </button>
-                    )}
-                    <button
-                      onClick={() => {
-                        setRxAppointmentId(appt.id);
-                        setRxPatientId(appt.patientId);
-                        setRxPatientName(appt.patient?.user?.fullName || "Patient");
-                        setTab("prescribe");
-                      }}
-                      className="px-4 py-2.5 rounded-xl bg-[#0E4A43] hover:brightness-110 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs"
-                    >
-                      <Pill className="w-3.5 h-3.5" />
-                      <span>Issue E-Rx</span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        setRefPatientId(appt.patientId);
-                        setRefPatientName(appt.patient?.user?.fullName || "Patient");
-                        setTab("referrals");
-                      }}
-                      className="px-3 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-xs"
-                    >
-                      Refer
-                    </button>
+                      <button
+                        onClick={() => {
+                          setRefPatientId(appt.patientId);
+                          setRefPatientName(appt.patient?.user?.fullName || "Patient");
+                          setTab("referrals");
+                        }}
+                        className="px-3 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-xs"
+                      >
+                        Refer
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
