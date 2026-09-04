@@ -312,6 +312,20 @@ export const authService = {
 
     if (!user) throw new Error('User not found');
 
+    if (user.role === 'PATIENT' && !user.patient) {
+      const newPatient = await prisma.patient.create({
+        data: {
+          userId: user.id,
+          district: 'Pune',
+          state: 'Maharashtra',
+          village: 'Pune',
+          bloodGroup: 'B+',
+        },
+        include: { medicalHistory: true },
+      });
+      (user as any).patient = newPatient;
+    }
+
     // 3. Populate Redis with 15-minute TTL
     await redisCache.set(cacheKey, user, 900);
 

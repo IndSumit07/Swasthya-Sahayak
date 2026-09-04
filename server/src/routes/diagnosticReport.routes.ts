@@ -1,10 +1,10 @@
 import { Router } from "express";
 import { DiagnosticReportController } from "../controllers/diagnosticReport.controller";
-import { authenticate } from "../middlewares/auth.middleware";
+import { authenticate, resolveIdentity } from "../middlewares/auth.middleware";
 
 const router = Router();
 
-router.use(authenticate);
+router.use(authenticate, resolveIdentity);
 
 router.get("/", DiagnosticReportController.list);
 router.post("/", DiagnosticReportController.create);

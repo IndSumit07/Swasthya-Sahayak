@@ -84,6 +84,7 @@ export async function resolveIdentity(req: Request, res: Response, next: NextFun
   }
 
   req.identity = { userId: user.id, role: user.role, status: user.status };
+  (req as any).user = { id: user.id, userId: user.id, role: user.role, status: user.status };
   next();
 }
 

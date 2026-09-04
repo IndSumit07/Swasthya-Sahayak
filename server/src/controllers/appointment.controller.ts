@@ -11,16 +11,28 @@ export class AppointmentController {
       const facilityId = req.query.facilityId as string | undefined;
       const status = req.query.status as any;
       const date = req.query.date as string | undefined;
-      const user = (req as any).user;
+      const user = req.identity || (req as any).user;
 
       let effectivePatientId = patientId;
       let effectiveDoctorId = doctorId;
 
       if (user?.role === "PATIENT") {
-        const p = await prisma.patient.findUnique({ where: { userId: user.id } });
-        if (p) effectivePatientId = p.id;
+        let p = await prisma.patient.findUnique({ where: { userId: user.userId || user.id } });
+        if (!p) {
+          p = await prisma.patient.create({
+            data: {
+              userId: user.userId || user.id,
+              district: "Pune",
+              state: "Maharashtra",
+              village: "Pune",
+              bloodGroup: "B+",
+            },
+          });
+        }
+        // STRICT USER ISOLATION: A patient can ONLY view their own appointments
+        effectivePatientId = p.id;
       } else if (user?.role === "DOCTOR") {
-        const d = await prisma.doctor.findUnique({ where: { userId: user.id } });
+        const d = await prisma.doctor.findUnique({ where: { userId: user.userId || user.id } });
         if (d && !patientId) effectiveDoctorId = d.id;
       }
 
@@ -41,11 +53,21 @@ export class AppointmentController {
   static async getById(req: Request, res: Response): Promise<void> {
     try {
       const id = req.params.id as string;
+      const user = req.identity || (req as any).user;
       const appointment = await AppointmentService.getById(id);
       if (!appointment) {
         res.status(404).json({ success: false, message: "Appointment not found." });
         return;
       }
+
+      if (user?.role === "PATIENT") {
+        const p = await prisma.patient.findUnique({ where: { userId: user.userId || user.id } });
+        if (!p || appointment.patientId !== p.id) {
+          res.status(403).json({ success: false, message: "Access denied to this appointment." });
+          return;
+        }
+      }
+
       res.json({ success: true, data: appointment });
     } catch (err: any) {
       res.status(500).json({ success: false, message: err.message || "Failed to get appointment." });
@@ -57,15 +79,23 @@ export class AppointmentController {
    */
   static async create(req: Request, res: Response): Promise<void> {
     try {
-      const user = (req as any).user;
+      const user = req.identity || (req as any).user;
       let patientId = req.body.patientId;
 
-      if (!patientId && user?.role === "PATIENT") {
-        const p = await prisma.patient.findUnique({ where: { userId: user.id } });
+      if (user?.role === "PATIENT") {
+        let p = await prisma.patient.findUnique({ where: { userId: user.userId || user.id } });
         if (!p) {
-          res.status(400).json({ success: false, message: "Patient profile not found. Please complete profile first." });
-          return;
+          p = await prisma.patient.create({
+            data: {
+              userId: user.userId || user.id,
+              district: "Pune",
+              state: "Maharashtra",
+              village: "Pune",
+              bloodGroup: "B+",
+            },
+          });
         }
+        // STRICT USER ISOLATION: A patient always books for themselves
         patientId = p.id;
       }
 
@@ -161,10 +191,20 @@ export class AppointmentController {
     try {
       const id = req.params.id as string;
       const { newDate, newSlot, newDoctorId } = req.body;
+      const user = req.identity || (req as any).user;
 
       if (!newDate || !newSlot) {
         res.status(400).json({ success: false, message: "newDate and newSlot are required." });
         return;
+      }
+
+      if (user?.role === "PATIENT") {
+        const p = await prisma.patient.findUnique({ where: { userId: user.userId || user.id } });
+        const existing = await AppointmentService.getById(id);
+        if (!existing || !p || existing.patientId !== p.id) {
+          res.status(403).json({ success: false, message: "Access denied to this appointment." });
+          return;
+        }
       }
 
       const updated = await AppointmentService.reschedule(id, {
@@ -190,6 +230,16 @@ export class AppointmentController {
     try {
       const id = req.params.id as string;
       const { reason } = req.body;
+      const user = req.identity || (req as any).user;
+
+      if (user?.role === "PATIENT") {
+        const p = await prisma.patient.findUnique({ where: { userId: user.userId || user.id } });
+        const existing = await AppointmentService.getById(id);
+        if (!existing || !p || existing.patientId !== p.id) {
+          res.status(403).json({ success: false, message: "Access denied to this appointment." });
+          return;
+        }
+      }
 
       const cancelled = await AppointmentService.cancel(id, reason);
       res.json({ success: true, data: cancelled, message: "Appointment cancelled successfully." });
@@ -205,10 +255,20 @@ export class AppointmentController {
     try {
       const id = req.params.id as string;
       const { newDate, newSlot, newDoctorId } = req.body;
+      const user = req.identity || (req as any).user;
 
       if (!newDate || !newSlot) {
         res.status(400).json({ success: false, message: "newDate and newSlot are required." });
         return;
+      }
+
+      if (user?.role === "PATIENT") {
+        const p = await prisma.patient.findUnique({ where: { userId: user.userId || user.id } });
+        const existing = await AppointmentService.getById(id);
+        if (!existing || !p || existing.patientId !== p.id) {
+          res.status(403).json({ success: false, message: "Access denied to this appointment." });
+          return;
+        }
       }
 
       const newAppt = await AppointmentService.rebook(id, {

@@ -8,17 +8,22 @@ export class PrescriptionController {
       const patientId = req.query.patientId as string | undefined;
       const doctorId = req.query.doctorId as string | undefined;
       const facilityId = req.query.facilityId as string | undefined;
-      const user = (req as any).user;
+      const user = req.identity || (req as any).user;
 
       let effectivePatientId = patientId;
       let effectiveDoctorId = doctorId;
 
       if (user?.role === "PATIENT") {
-        const p = await prisma.patient.findUnique({ where: { userId: user.id } });
-        if (p) effectivePatientId = p.id;
+        const p = await prisma.patient.findUnique({ where: { userId: user.userId || user.id } });
+        effectivePatientId = p ? p.id : "NO_PATIENT";
       } else if (user?.role === "DOCTOR") {
-        const d = await prisma.doctor.findUnique({ where: { userId: user.id } });
+        const d = await prisma.doctor.findUnique({ where: { userId: user.userId || user.id } });
         if (d && !patientId) effectiveDoctorId = d.id;
+      }
+
+      if (effectivePatientId === "NO_PATIENT") {
+        res.json({ success: true, data: [] });
+        return;
       }
 
       const prescriptions = await PrescriptionService.list({

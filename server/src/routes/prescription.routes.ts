@@ -1,10 +1,10 @@
 import { Router } from "express";
 import { PrescriptionController } from "../controllers/prescription.controller";
-import { authenticate } from "../middlewares/auth.middleware";
+import { authenticate, resolveIdentity } from "../middlewares/auth.middleware";
 
 const router = Router();
 
-router.use(authenticate);
+router.use(authenticate, resolveIdentity);
 
 router.get("/", PrescriptionController.list);
 router.get("/:id", PrescriptionController.getById);

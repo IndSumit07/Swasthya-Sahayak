@@ -1,10 +1,10 @@
 import { Router } from "express";
 import { ReferralController } from "../controllers/referral.controller";
-import { authenticate } from "../middlewares/auth.middleware";
+import { authenticate, resolveIdentity } from "../middlewares/auth.middleware";
 
 const router = Router();
 
-router.use(authenticate);
+router.use(authenticate, resolveIdentity);
 
 router.get("/", ReferralController.list);
 router.get("/:id", ReferralController.getById);

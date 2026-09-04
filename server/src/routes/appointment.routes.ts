@@ -1,10 +1,10 @@
 import { Router } from "express";
 import { AppointmentController } from "../controllers/appointment.controller";
-import { authenticate } from "../middlewares/auth.middleware";
+import { authenticate, resolveIdentity } from "../middlewares/auth.middleware";
 
 const router = Router();
 
-router.use(authenticate);
+router.use(authenticate, resolveIdentity);
 
 // List and detail
 router.get("/", AppointmentController.list);

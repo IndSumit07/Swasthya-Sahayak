@@ -11,18 +11,23 @@ export class ReferralController {
       const status = req.query.status as any;
       const priority = req.query.priority as any;
       const district = req.query.district as string | undefined;
-      const user = (req as any).user;
+      const user = req.identity || (req as any).user;
 
       let effectivePatientId = patientId;
 
       if (user?.role === "PATIENT") {
-        const p = await prisma.patient.findUnique({ where: { userId: user.id } });
-        if (p) effectivePatientId = p.id;
+        const p = await prisma.patient.findUnique({ where: { userId: user.userId || user.id } });
+        effectivePatientId = p ? p.id : "NO_PATIENT";
+      }
+
+      if (effectivePatientId === "NO_PATIENT") {
+        res.json({ success: true, data: [] });
+        return;
       }
 
       let effectiveDistrict = district;
       if (user?.role === "DISTRICT_ADMIN") {
-        const da = await prisma.districtAdmin.findUnique({ where: { userId: user.id } });
+        const da = await prisma.districtAdmin.findUnique({ where: { userId: user.userId || user.id } });
         if (da && da.district !== "ALL") {
           effectiveDistrict = da.district;
         }
