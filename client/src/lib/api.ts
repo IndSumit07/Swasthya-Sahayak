@@ -3,42 +3,13 @@
  */
 
 /**
- * Resolves the backend API base URL safely across local dev, Vercel SSR, and Vercel browser.
- * Never requests localhost from a production browser (e.g. *.vercel.app).
+ * Resolves the backend API base URL from NEXT_API_URL or defaults to localhost for local dev.
  */
 export function getBaseUrl(): string {
   const envUrl = (process.env.NEXT_API_URL || process.env.NEXT_PUBLIC_API_URL || '').trim();
-  const isBrowser = typeof window !== 'undefined';
-  const isHttps = isBrowser && window.location.protocol === 'https:';
-  const isLocalHost = isBrowser && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-
-  // CRITICAL: When the page is loaded over HTTPS (e.g. on https://*.vercel.app):
-  // Browsers strictly forbid fetching plain http:// endpoints (Mixed Content block).
-  // Therefore, whenever on an HTTPS page, if the backend URL is not already HTTPS,
-  // we MUST return relative '/api/v1' so that:
-  // 1) The browser request is HTTPS to the same origin (zero Mixed Content block)
-  // 2) Next.js rewrites on Vercel proxy the call server-to-server to the EC2 backend
-  // 3) Cookies are treated as 1st-party same-origin cookies (no CORS or cookie drop)
-  if (isHttps) {
-    if (envUrl.startsWith('https://')) {
-      return envUrl.replace(/\/+$/, '');
-    }
-    return '/api/v1';
-  }
-
   if (envUrl !== '') {
-    if (isBrowser && !isLocalHost && (envUrl.includes('localhost') || envUrl.includes('127.0.0.1'))) {
-      return '/api/v1';
-    }
     return envUrl.replace(/\/+$/, '');
   }
-
-  // If in browser on a production domain without NEXT_API_URL, use relative /api/v1
-  if (isBrowser && !isLocalHost) {
-    return '/api/v1';
-  }
-
-  // Local development default
   return 'http://localhost:4000/api/v1';
 }
 
