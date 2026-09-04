@@ -175,3 +175,89 @@ With this rewrite:
 2. In client, leave `NEXT_PUBLIC_API_URL=/api/v1`.
 3. The browser only talks to `https://your-app.vercel.app/api/v1/...`, which Vercel securely forwards to your EC2 backend.
 4. Zero CORS headers needed, zero third-party cookie warnings!
+
+---
+
+## 4. Automated CI/CD with GitHub Actions (Auto-Deploy on Git Push)
+
+A complete automated CI/CD pipeline is configured in [`.github/workflows/deploy.yml`](file:///.github/workflows/deploy.yml). Every time you push code to the `main` branch, GitHub Actions will automatically connect to your EC2 instance over SSH, pull the latest commits, rebuild the backend container, and verify the healthcheck endpoint.
+
+### Step 4.1: Add GitHub Repository Secrets
+1. On GitHub, navigate to your repository: **`IndSumit07/Swasthya-Sahayak`**.
+2. Click **Settings** (top tab) &rarr; **Secrets and variables** (left sidebar) &rarr; **Actions**.
+3. Click **New repository secret** and add the following 3 secrets:
+
+| Secret Name | Example Value | Description |
+|---|---|---|
+| `EC2_HOST` | `54.210.120.45` | Public IP or Public DNS of your EC2 instance |
+| `EC2_USER` | `ubuntu` | Default username for Ubuntu LTS (`ubuntu`) |
+| `EC2_SSH_KEY` | `-----BEGIN RSA PRIVATE KEY----- ...` | Entire contents of your `.pem` key pair file |
+| `EC2_PORT` | `22` *(Optional)* | Default SSH port (defaults to `22` if omitted) |
+
+> [!IMPORTANT]
+> When copying your private key into `EC2_SSH_KEY`, paste the **entire file** including:
+> ```
+> -----BEGIN RSA PRIVATE KEY-----
+> MIIEowIBAAKCAQEA...
+> -----END RSA PRIVATE KEY-----
+> ```
+> Make sure there are no accidental trailing spaces.
+
+### Step 4.2: How the Auto-Deploy Pipeline Works
+1. **Trigger**: Pushing code affecting `server/**` or `docker-compose.yml` to `main` automatically triggers the action.
+2. **Manual Trigger**: You can also trigger deployment on-demand anytime from the GitHub Actions tab by clicking **Deploy Backend & Redis to AWS EC2** &rarr; **Run workflow**.
+3. **Execution Steps**:
+   - Connects to EC2 via SSH using your key.
+   - Runs `git fetch origin main && git reset --hard origin/main` to sync code cleanly without merge conflicts.
+   - Preserves your existing `.env` on EC2.
+   - Runs `docker compose up -d --build --remove-orphans`.
+   - Polls `http://localhost:4000/api/v1/health` for up to 12 attempts to confirm the server booted successfully.
+   - Automatically prunes dangling Docker images (`docker image prune -f`) to save EC2 disk space.
+
+---
+
+## 5. How to Update Environment Variables (`.env`) & Restart in the Future
+
+Whenever you need to change a database password, add a new Vercel domain to `CORS_ORIGIN`, or update Supabase keys, follow this quick 3-step process:
+
+### Step 5.1: SSH into your EC2 Instance
+```bash
+ssh -i /path/to/your-key.pem ubuntu@<EC2-PUBLIC-IP>
+```
+
+### Step 5.2: Navigate to Server and Edit `.env`
+```bash
+cd ~/Swasthya-Sahayak/server
+nano .env
+```
+Use arrow keys to navigate to the variable you want to modify (e.g., updating `CORS_ORIGIN`, `DATABASE_URL`, or `MONGODB_URI`).
+- Save changes: Press **`Ctrl + O`**, then **`Enter`**.
+- Exit editor: Press **`Ctrl + X`**.
+
+### Step 5.3: Apply Changes and Restart the Backend
+Run the following single command:
+
+```bash
+docker compose up -d --no-deps backend
+```
+
+> [!TIP]
+> **Why `--no-deps backend`?**
+> - It restarts **ONLY** the backend container with the updated `.env` values.
+> - **Redis is NOT restarted**, which means your in-memory cache, rate limits, and queue worker jobs are **never dropped** or interrupted!
+> - The restart takes only **1 to 2 seconds**.
+
+### Step 5.4: Verify the New Configuration
+Check the logs to verify the container picked up the changes and is running normally:
+```bash
+# View the last 30 lines of backend logs
+docker compose logs --tail=30 backend
+
+# Verify health status
+curl http://localhost:4000/api/v1/health
+```
+You should see:
+```json
+{"status":"healthy","uptime":5,"database":{"postgres":"connected","redis":"connected"}}
+```
+

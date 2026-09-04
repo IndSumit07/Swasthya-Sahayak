@@ -1,0 +1,97 @@
+name: Deploy Backend & Redis to AWS EC2
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'server/**'
+      - 'docker-compose.yml'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch: # Allows manual deployment trigger from GitHub Actions dashboard
+
+jobs:
+  deploy:
+    name: Deploy to EC2
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: SSH into EC2 and Deploy
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER || 'ubuntu' }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: ${{ secrets.EC2_PORT || 22 }}
+          script_stop: true
+          script: |
+            echo "=========================================================="
+            echo "  Deploying Swasthya Sahayak Backend to AWS EC2           "
+            echo "=========================================================="
+
+            # 1. Navigate to the project server directory
+            if [ -d "$HOME/Swasthya-Sahayak/server" ]; then
+              cd "$HOME/Swasthya-Sahayak/server"
+            elif [ -d "$HOME/Swasthya-Sahayak" ]; then
+              cd "$HOME/Swasthya-Sahayak"
+            else
+              echo "Error: Directory Swasthya-Sahayak not found in $HOME"
+              exit 1
+            fi
+
+            # 2. Pull latest changes from main branch cleanly
+            echo "[1/5] Pulling latest changes from origin/main..."
+            git fetch origin main
+            git reset --hard origin/main
+
+            # 3. Ensure .env file exists
+            if [ ! -f .env ]; then
+              if [ -f .env.example ]; then
+                echo "[!] .env was missing, copying from .env.example..."
+                cp .env.example .env
+              else
+                echo "[!] Error: No .env file found. Please create one on EC2."
+                exit 1
+              fi
+            fi
+
+            # 4. Build and restart Docker containers
+            echo "[2/5] Building and restarting Docker containers..."
+            docker compose up -d --build --remove-orphans
+
+            # 5. Verify Health Endpoint
+            echo "[3/5] Verifying application healthcheck..."
+            sleep 8
+
+            HEALTH_PASSED=false
+            for i in {1..12}; do
+              STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:4000/api/v1/health || true)
+              if [ "$STATUS" = "200" ]; then
+                echo "[✓] Healthcheck passed on attempt $i (HTTP 200 OK)!"
+                HEALTH_PASSED=true
+                break
+              fi
+              echo "Waiting for healthcheck response... (attempt $i/12)"
+              sleep 4
+            done
+
+            if [ "$HEALTH_PASSED" != "true" ]; then
+              echo "[✗] Healthcheck failed! Fetching recent container logs:"
+              docker compose logs --tail=40
+              exit 1
+            fi
+
+            # 6. Clean up dangling images to preserve disk space on EC2
+            echo "[4/5] Pruning dangling Docker build layers..."
+            docker image prune -f
+
+            # 7. Print running container status
+            echo "[5/5] Active service status:"
+            docker compose ps
+
+            echo "=========================================================="
+            echo "  Deployment Finished Successfully!                       "
+            echo "=========================================================="
