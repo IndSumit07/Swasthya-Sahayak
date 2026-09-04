@@ -367,6 +367,78 @@ curl http://localhost:4000/api/v1/health
 
 ---
 
+## Phase 5.5: Custom Domain & Free HTTPS (SSL) Setup
+
+To connect a custom domain like **`ss.api.sumoraai.in`** with a free auto-renewing SSL certificate (HTTPS), follow these steps:
+
+### Step 5.5.1: Point DNS `A` Record to your EC2 IP
+In your DNS provider (Cloudflare, GoDaddy, Namecheap, Route53, Hostinger):
+- **Type**: `A`
+- **Name / Subdomain**: `ss.api` (or `ss.api.sumoraai.in`)
+- **Target / Value**: `15.252.169.184` (Your EC2 Public IP)
+- **TTL**: `Auto` or `300 seconds`
+- *(If using Cloudflare: Set Proxy Status to "DNS Only" / Grey cloud during certbot setup)*
+
+### Step 5.5.2: Open Ports 80 & 443 in AWS EC2 Security Group
+1. AWS Console &rarr; EC2 &rarr; Instances &rarr; Select your instance.
+2. Click **Security** tab &rarr; Click Security Group ID &rarr; **Edit Inbound Rules**.
+3. Add:
+   - **HTTP**: Port `80`, Source `0.0.0.0/0`
+   - **HTTPS**: Port `443`, Source `0.0.0.0/0`
+4. Click **Save rules**.
+
+### Step 5.5.3: Install Nginx & Certbot on EC2
+SSH into your EC2 instance and run:
+```bash
+sudo apt update
+sudo apt install -y nginx certbot python3-certbot-nginx
+```
+
+### Step 5.5.4: Configure Nginx Reverse Proxy
+Create the Nginx configuration file:
+```bash
+sudo nano /etc/nginx/sites-available/ss.api.sumoraai.in
+```
+Paste this configuration:
+```nginx
+server {
+    server_name ss.api.sumoraai.in;
+
+    location / {
+        proxy_pass http://127.0.0.1:4000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+Enable the site and reload Nginx:
+```bash
+sudo ln -s /etc/nginx/sites-available/ss.api.sumoraai.in /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+### Step 5.5.5: Issue Free SSL Certificate with Certbot
+```bash
+sudo certbot --nginx -d ss.api.sumoraai.in
+```
+- Enter your email address for renewal notices.
+- Agree to terms (`Y`).
+- Certbot will automatically verify the domain, download the certificate, and configure Nginx for HTTPS with HTTP &rarr; HTTPS automatic redirection!
+
+### Step 5.5.6: Update Vercel Environment Variables
+On Vercel Dashboard &rarr; Settings &rarr; **Environment Variables**:
+- Update **`NEXT_API_URL`**: `https://ss.api.sumoraai.in/api/v1`
+- Redeploy your Vercel project.
+
+---
+
 ## Phase 6: Maintenance & Troubleshooting Cheatsheet
 
 ### Check Running Services
