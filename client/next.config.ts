@@ -10,7 +10,7 @@ const nextConfig: NextConfig = {
     const rawBackendUrl = process.env.NEXT_API_URL || process.env.NEXT_PUBLIC_API_URL;
     if (!rawBackendUrl) return [];
 
-    const backendOrigin = rawBackendUrl.replace(/\/api\/v1\/?$/, '').replace(/\/+$/, '');
+    const backendOrigin = rawBackendUrl.replace(/\/api(\/v1)?\/?$/, '').replace(/\/+$/, '');
     if (!backendOrigin || backendOrigin.includes('localhost') || backendOrigin.includes('127.0.0.1')) {
       return [];
     }
