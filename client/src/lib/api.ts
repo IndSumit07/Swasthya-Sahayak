@@ -2,7 +2,31 @@
  * api.ts — Typed fetch wrapper for all client → Express server communication.
  */
 
-const BASE_URL = process.env.NEXT_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
+/**
+ * Resolves the backend API base URL safely across local dev, Vercel SSR, and Vercel browser.
+ * Never requests localhost from a production browser (e.g. *.vercel.app).
+ */
+export function getBaseUrl(): string {
+  const envUrl = (process.env.NEXT_API_URL || process.env.NEXT_PUBLIC_API_URL || '').trim();
+  const isBrowser = typeof window !== 'undefined';
+  const isLocalHost = isBrowser && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+  if (envUrl !== '') {
+    // If in production browser but envUrl was accidentally configured as localhost, use relative /api/v1
+    if (isBrowser && !isLocalHost && (envUrl.includes('localhost') || envUrl.includes('127.0.0.1'))) {
+      return '/api/v1';
+    }
+    return envUrl.replace(/\/+$/, '');
+  }
+
+  // If in browser on a production domain without NEXT_API_URL, use relative /api/v1 (routed via Next rewrites)
+  if (isBrowser && !isLocalHost) {
+    return '/api/v1';
+  }
+
+  // Local development default
+  return 'http://localhost:4000/api/v1';
+}
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -20,8 +44,13 @@ export async function apiFetch<T = unknown>(
   { body, headers: extraHeaders, ...options }: FetchOptions = {}
 ): Promise<T> {
   const isFormData = body instanceof FormData;
+  const baseUrl = getBaseUrl();
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  const fullUrl = path.startsWith('http://') || path.startsWith('https://')
+    ? path
+    : `${baseUrl}${normalizedPath}`;
 
-  const response = await fetch(`${BASE_URL}${path}`, {
+  const response = await fetch(fullUrl, {
     credentials: 'include',
     headers: {
       ...(isFormData ? {} : { 'Content-Type': 'application/json' }),

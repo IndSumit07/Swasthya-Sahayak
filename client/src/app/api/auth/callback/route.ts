@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const API_BASE = process.env.NEXT_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
+function getApiBase(request: NextRequest): string {
+  const envUrl = (process.env.NEXT_API_URL || process.env.NEXT_PUBLIC_API_URL || '').trim();
+  if (envUrl && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {
+    return envUrl.replace(/\/+$/, '');
+  }
+  const host = request.headers.get('host') || '';
+  if (host && !host.includes('localhost') && !host.includes('127.0.0.1')) {
+    const proto = request.headers.get('x-forwarded-proto') || 'https';
+    return `${proto}://${host}/api/v1`;
+  }
+  return envUrl ? envUrl.replace(/\/+$/, '') : 'http://localhost:4000/api/v1';
+}
 
 /**
  * Next.js Route Handler — receives the Supabase auth code from:
@@ -18,8 +29,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL('/login?error=missing_code', request.url));
   }
 
+  const apiBase = getApiBase(request);
+
   try {
-    const expressRes = await fetch(`${API_BASE}/auth/callback?code=${encodeURIComponent(code)}`, {
+    const expressRes = await fetch(`${apiBase}/auth/callback?code=${encodeURIComponent(code)}`, {
       method: 'GET',
       credentials: 'include',
     });
