@@ -2,11 +2,11 @@ import { Request, Response, NextFunction } from 'express';
 import { authService } from '../services/auth.service';
 import { env } from '../config/env';
 
-// Cookie config — httpOnly prevents JS access; Secure in prod
+// Cookie config — httpOnly prevents JS access; configurable SameSite & Secure
 const COOKIE_OPTS = {
   httpOnly: true,
-  secure: env.NODE_ENV === 'production',
-  sameSite: 'lax' as const,
+  secure: env.COOKIE_SECURE,
+  sameSite: env.COOKIE_SAME_SITE,
   path: '/',
 };
 

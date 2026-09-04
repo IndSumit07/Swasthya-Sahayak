@@ -22,6 +22,9 @@ interface EnvConfig {
   REDIS_PASSWORD?: string;
   REDIS_DB: number;
   REDIS_URL?: string;
+  // Cookie Configuration
+  COOKIE_SAME_SITE: 'lax' | 'none' | 'strict';
+  COOKIE_SECURE: boolean;
 }
 
 export const env: EnvConfig = {
@@ -39,4 +42,6 @@ export const env: EnvConfig = {
   REDIS_PASSWORD: process.env.REDIS_PASSWORD || undefined,
   REDIS_DB: parseInt(process.env.REDIS_DB || '0', 10),
   REDIS_URL: process.env.REDIS_URL || undefined,
+  COOKIE_SAME_SITE: (process.env.COOKIE_SAME_SITE as 'lax' | 'none' | 'strict') || (process.env.NODE_ENV === 'production' ? 'none' : 'lax'),
+  COOKIE_SECURE: process.env.COOKIE_SECURE !== undefined ? process.env.COOKIE_SECURE === 'true' : process.env.NODE_ENV === 'production',
 };

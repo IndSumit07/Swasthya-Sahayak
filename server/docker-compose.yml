@@ -1,0 +1,60 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: swasthya-redis
+    restart: always
+    command: redis-server --appendonly yes --save 60 1 --loglevel warning
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    networks:
+      - swasthya-net
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: swasthya-backend
+    restart: always
+    ports:
+      - "4000:4000"
+    env_file:
+      - .env
+    environment:
+      - PORT=4000
+      - NODE_ENV=production
+      # Inside Docker network, backend points to the redis container service
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_URL=redis://redis:6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - REDIS_DB=0
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3000}
+      - COOKIE_SAME_SITE=${COOKIE_SAME_SITE:-none}
+      - COOKIE_SECURE=${COOKIE_SECURE:-true}
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - swasthya-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/api/v1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  redis_data:
+    driver: local
+
+networks:
+  swasthya-net:
+    driver: bridge

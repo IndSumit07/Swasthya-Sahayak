@@ -11,10 +11,28 @@ const app: Application = express();
 
 // Security Middlewares
 app.use(helmet());
+// CORS Origin Validation (supports comma-separated origins & Vercel deployment domains)
+const parsedOrigins = env.CORS_ORIGIN
+  ? env.CORS_ORIGIN.split(',').map((o) => o.trim())
+  : ['http://localhost:3000'];
+
 app.use(
   cors({
-    origin: env.CORS_ORIGIN,
-    credentials: true, // required for httpOnly cookie cross-origin flow
+    origin: (origin, callback) => {
+      // Allow requests with no origin (e.g. mobile apps, curl, health probes)
+      if (!origin) return callback(null, true);
+
+      if (
+        parsedOrigins.includes('*') ||
+        parsedOrigins.includes(origin) ||
+        origin.endsWith('.vercel.app')
+      ) {
+        return callback(null, true);
+      }
+
+      callback(new Error(`CORS blocked for origin: ${origin}`));
+    },
+    credentials: true, // required for cross-origin httpOnly cookie flow
   })
 );
 
