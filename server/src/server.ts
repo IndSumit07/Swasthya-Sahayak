@@ -33,6 +33,22 @@ const startServer = async () => {
     logger.info(`Health check: http://localhost:${env.PORT}/api/v1/health`);
   });
 
+  server.on('error', (err: any) => {
+    if (err.code === 'EADDRINUSE') {
+      logger.error(`Port ${env.PORT} is already in use.`);
+      process.exit(1);
+    } else {
+      logger.error('Server listener error:', err);
+    }
+  });
+
+  // nodemon restart signal handling to release port immediately
+  process.once('SIGUSR2', () => {
+    server.close(() => {
+      process.kill(process.pid, 'SIGUSR2');
+    });
+  });
+
   // Graceful Shutdown
   const handleShutdown = async (signal: string) => {
     logger.info(`Received ${signal}. Shutting down gracefully...`);
