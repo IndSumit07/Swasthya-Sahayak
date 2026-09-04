@@ -1,21 +1,30 @@
-# Swasthya Sahayak — Production Deployment Guide
+# Swasthya Sahayak — Complete Production Deployment Guide
 
-This guide outlines how to deploy **Swasthya Sahayak** into production across **Vercel** (Frontend) and **AWS EC2** (Dockerized Backend + Redis).
+This guide provides the complete, step-by-step production deployment workflow for **Swasthya Sahayak**:
+- **Backend & Redis**: Containerized with Docker & Docker Compose on **AWS EC2 (Ubuntu 26.04 LTS)**.
+- **Frontend UI**: Deployed globally on **Vercel** with Next.js 15.
+- **CI/CD**: Fully automated deployment to EC2 via **GitHub Actions** on every `git push`.
+- **Database**: Managed **Supabase PostgreSQL** & **MongoDB Atlas**.
+
+---
+
+## High-Level System Architecture
 
 ```
    ┌────────────────────────────────────────────────────────┐
-   │                    Vercel (Global CDN)                │
+   │                  Vercel (Global Edge)                  │
    │               Next.js 15 Frontend UI                   │
    │           https://swasthya-sahayak.vercel.app          │
    └───────────────────────────┬────────────────────────────┘
-                               │ HTTP / JSON (Credentials included)
+                               │ HTTPS / JSON (Credentials included)
                                ▼
    ┌────────────────────────────────────────────────────────┐
-   │              AWS EC2 Instance (Ubuntu / AL2023)        │
+   │             AWS EC2 Instance (Ubuntu 26.04 LTS)        │
+   │                                                        │
    │  ┌───────────────────────┐  ┌───────────────────────┐  │
    │  │  swasthya-backend     │  │    swasthya-redis     │  │
    │  │  Express + Prisma API │◄─┼──► Redis 7 Alpine    │  │
-   │  │  (Port 4000)          │  │    (Port 6379)        │  │
+   │  │  Port 4000            │  │    Port 6379 (Local)  │  │
    │  └───────────┬───────────┘  └───────────────────────┘  │
    └──────────────┼─────────────────────────────────────────┘
                   │
@@ -29,131 +38,266 @@ This guide outlines how to deploy **Swasthya Sahayak** into production across **
 
 ---
 
-## 1. AWS EC2 Setup (Backend + Redis)
-
-### Step 1.1: Launch EC2 Instance
-1. Go to **AWS Management Console** &rarr; **EC2** &rarr; **Launch Instance**.
-2. **Name**: `swasthya-sahayak-backend`
-3. **AMI**: **Ubuntu 22.04 LTS** or **Amazon Linux 2023** (64-bit x86).
-4. **Instance Type**: `t3.small` (2 vCPU, 2 GiB RAM) or `t3.medium` (recommended for BullMQ queues + Redis cache).
-5. **Key Pair**: Select or create an SSH key pair (`.pem`).
-6. **Network / Security Group**:
-   - Allow **SSH (22)** from `My IP`
-   - Allow **Custom TCP (4000)** from `Anywhere (0.0.0.0/0)` (or Nginx 80/443 if you configure SSL)
-   - **DO NOT** expose port 6379 to the public internet (Redis is bound to `127.0.0.1` and internal Docker network).
-7. **Storage**: 20 GiB gp3.
-8. Click **Launch Instance**.
+## Table of Contents
+1. [Phase 1: AWS EC2 Instance Setup (Ubuntu 26.04 LTS)](#phase-1-aws-ec2-instance-setup-ubuntu-2604-lts)
+2. [Phase 2: One-Time EC2 Server Configuration & First Launch](#phase-2-one-time-ec2-server-configuration--first-launch)
+3. [Phase 3: GitHub Actions CI/CD Pipeline (Auto-Deploy on Git Push)](#phase-3-github-actions-cicd-pipeline-auto-deploy-on-git-push)
+4. [Phase 4: Vercel Frontend Deployment](#phase-4-vercel-frontend-deployment)
+5. [Phase 5: How to Update Environment Variables (.env) in the Future & Restart](#phase-5-how-to-update-environment-variables-env-in-the-future--restart)
+6. [Phase 6: Maintenance & Troubleshooting Cheatsheet](#phase-6-maintenance--troubleshooting-cheatsheet)
 
 ---
 
-### Step 1.2: Connect and Deploy with 1 Command
+## Phase 1: AWS EC2 Instance Setup (Ubuntu 26.04 LTS)
 
-SSH into your EC2 instance:
+### Step 1.1: Launch the EC2 Instance
+1. Log in to the [AWS Management Console](https://console.aws.amazon.com/ec2/).
+2. In the top-right corner, select your preferred region (e.g. `ap-south-1` Mumbai).
+3. Navigate to **EC2 Dashboard** &rarr; click **Launch Instance**.
+4. Configure the instance settings:
+   - **Name**: `swasthya-sahayak-backend`
+   - **Application and OS Images (AMI)**: Select **Ubuntu**, then choose **Ubuntu Server 26.04 LTS** (64-bit x86).
+   - **Instance Type**: Select **`t3.small`** (2 vCPU, 2 GiB RAM) or **`t3.medium`** (2 vCPU, 4 GiB RAM, recommended for running BullMQ workers + Redis + Node concurrent requests).
+   - **Key Pair (login)**:
+     - Click **Create new key pair**.
+     - Name: `swasthya-ec2-key`
+     - Key pair type: `RSA`
+     - Private key file format: `.pem`
+     - Click **Create key pair** and save the downloaded file to your local computer.
+   - **Network Settings (Security Group)**:
+     - Check **Create security group**.
+     - Set Inbound Security Group Rules:
+       | Type | Port Range | Source Type | Source | Purpose |
+       |---|---|---|---|---|
+       | **SSH** | `22` | My IP (or Anywhere `0.0.0.0/0`) | `0.0.0.0/0` | Server administration & GitHub Actions |
+       | **Custom TCP** | `4000` | Anywhere | `0.0.0.0/0` | Express Backend API |
+       | **HTTP** | `80` | Anywhere | `0.0.0.0/0` | Optional Nginx / Certbot SSL |
+       | **HTTPS** | `443` | Anywhere | `0.0.0.0/0` | Optional Nginx / Certbot SSL |
+     > [!CAUTION]
+     > **NEVER add Port 6379 (Redis) to the EC2 Security Group!** Redis is securely bound only to `127.0.0.1` and the internal Docker bridge network. It must never be exposed to the public internet.
+   - **Configure Storage**: Set to **25 GiB** (`gp3`).
+5. Review the summary and click **Launch Instance**.
+6. Once launched, copy the **Public IPv4 address** from the EC2 console (e.g., `54.210.120.45`).
+
+---
+
+## Phase 2: One-Time EC2 Server Configuration & First Launch
+
+### Step 2.1: Connect to your Ubuntu 26.04 LTS Instance via SSH
+Open your terminal (macOS/Linux) or PowerShell (Windows):
+
 ```bash
-ssh -i /path/to/your-key.pem ubuntu@<EC2-PUBLIC-IP>
+# Set permissions on your downloaded private key (Linux/macOS)
+chmod 400 /path/to/swasthya-ec2-key.pem
+
+# SSH into your EC2 instance (default username is ubuntu)
+ssh -i /path/to/swasthya-ec2-key.pem ubuntu@<YOUR-EC2-PUBLIC-IP>
 ```
 
-Clone the repository and run the automated deployment script:
+---
+
+### Step 2.2: Install Docker & Docker Compose on Ubuntu 26.04 LTS
+Run the following commands on your EC2 instance to install the official Docker Engine and Compose plugin:
+
 ```bash
-# Clone the repository
+# 1. Update package lists
+sudo apt-get update && sudo apt-get upgrade -y
+
+# 2. Install prerequisites
+sudo apt-get install -y ca-certificates curl gnupg git
+
+# 3. Add Docker's official GPG key
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
+
+# 4. Add Docker repository to Apt sources
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+# 5. Install Docker Engine, CLI, and Docker Compose Plugin
+sudo apt-get update
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+# 6. Enable Docker service and add the ubuntu user to docker group
+sudo systemctl enable --now docker
+sudo usermod -aG docker ubuntu
+
+# Apply group changes immediately without logging out
+newgrp docker
+
+# Verify Docker and Compose are working
+docker --version
+docker compose version
+```
+
+---
+
+### Step 2.3: Clone Repository and Setup Environment Variables
+Clone the repository into your home directory:
+
+```bash
+cd ~
 git clone https://github.com/IndSumit07/Swasthya-Sahayak.git
 cd Swasthya-Sahayak/server
 
-# Configure your production environment variables
+# Create your production .env from the template
 cp .env.example .env
+
+# Open and edit .env with your live database and API keys
 nano .env
 ```
 
-Make sure your `.env` contains your live Supabase database password, MongoDB URI, and your Vercel frontend domain in `CORS_ORIGIN`:
+Ensure your `.env` contains your actual Supabase DB password, Supabase keys, MongoDB URI, and your frontend URL:
 ```env
+# Server Configuration
 PORT=4000
 NODE_ENV=production
-CORS_ORIGIN=http://localhost:3000,https://your-app.vercel.app
 
-# Cross-site cookie settings for Vercel -> EC2 communication
+# CORS: Add your Vercel URL (comma-separated, wildcard .vercel.app is also supported)
+CORS_ORIGIN="http://localhost:3000,https://swasthya-sahayak.vercel.app"
+
+# Cross-Site Cookie Settings for Vercel Frontend -> EC2 Backend
 COOKIE_SAME_SITE=none
 COOKIE_SECURE=true
 
+# Supabase Auth & Config
 SUPABASE_URL=https://kuvqrpblrqjogprywqjw.supabase.co
-SUPABASE_ANON_KEY=...
-SUPABASE_SERVICE_ROLE_KEY=...
-DATABASE_URL="postgresql://postgres.kuvqrpblrqjogprywqjw:[YOUR-PASSWORD]@aws-0-ap-south-1.pooler.supabase.com:6543/postgres?pgbouncer=true"
-DIRECT_URL="postgresql://postgres.kuvqrpblrqjogprywqjw:[YOUR-PASSWORD]@aws-0-ap-south-1.pooler.supabase.com:5432/postgres"
-MONGODB_URI="mongodb+srv://..."
-```
+SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
-Run the automated setup:
+# Prisma / Supabase PostgreSQL Connection
+DATABASE_URL="postgresql://postgres.kuvqrpblrqjogprywqjw:[YOUR-ACTUAL-PASSWORD]@aws-0-ap-south-1.pooler.supabase.com:6543/postgres?pgbouncer=true"
+DIRECT_URL="postgresql://postgres.kuvqrpblrqjogprywqjw:[YOUR-ACTUAL-PASSWORD]@aws-0-ap-south-1.pooler.supabase.com:5432/postgres"
+
+# MongoDB Connection
+MONGODB_URI="mongodb+srv://MainSumitHoon:[YOUR-PASSWORD]@cluster0.mongodb.net/?appName=Cluster0"
+
+# Redis Configuration (inside Docker network, points to redis container)
+REDIS_HOST=redis
+REDIS_PORT=6379
+REDIS_PASSWORD=
+REDIS_DB=0
+REDIS_URL=redis://redis:6379
+```
+- Save in `nano`: Press **`Ctrl + O`**, then press **`Enter`**.
+- Exit `nano`: Press **`Ctrl + X`**.
+
+---
+
+### Step 2.4: Launch the Containers
+Run the turnkey deployment script or launch Docker Compose directly:
+
 ```bash
+# Option A: Run the automated deployment script
 chmod +x deploy-ec2.sh
 ./deploy-ec2.sh
-```
 
-The script will automatically:
-1. Install Docker Engine and the Docker Compose plugin (if missing).
-2. Build the multi-stage production image with Prisma and TypeScript compilation.
-3. Start Redis 7 with AOF persistence.
-4. Launch the Express backend on port 4000.
-5. Perform health checks against `http://localhost:4000/api/v1/health`.
+# Option B: Run Docker Compose directly
+docker compose up -d --build
+```
 
 ---
 
-### Step 1.3: Useful EC2 Maintenance Commands
+### Step 2.5: Verify the Backend is Online
+Test the healthcheck endpoint:
 
 ```bash
-# View live application logs
-docker compose logs -f backend
-
-# View Redis logs
-docker compose logs -f redis
-
-# Restart the entire stack
-docker compose restart
-
-# Rebuild after pulling latest code from git
-git pull origin main
-docker compose up -d --build
-
-# Run database migrations/seeds inside container if needed
-docker compose exec backend npm run seed
+curl http://localhost:4000/api/v1/health
 ```
+
+Expected response:
+```json
+{
+  "status": "healthy",
+  "uptime": 12,
+  "timestamp": "2026-09-04T11:40:00.000Z",
+  "service": "Swasthya Sahayak API",
+  "database": {
+    "postgres": "connected",
+    "mongodb": "connected",
+    "redis": "connected"
+  }
+}
+```
+
+You can also test it from your computer browser:
+`http://<YOUR-EC2-PUBLIC-IP>:4000/api/v1/health`
 
 ---
 
-## 2. Vercel Deployment (Frontend UI)
+## Phase 3: GitHub Actions CI/CD Pipeline (Auto-Deploy on Git Push)
 
-### Step 2.1: Import Project in Vercel
-1. Log in to [vercel.com](https://vercel.com) and click **Add New...** &rarr; **Project**.
-2. Select your GitHub repository: `Swasthya-Sahayak`.
-3. Configure the project settings:
+The repository already contains the workflow file [`.github/workflows/deploy.yml`](file:///.github/workflows/deploy.yml).
+
+### Step 3.1: Add Repository Secrets on GitHub
+1. Go to your GitHub repository: **`https://github.com/IndSumit07/Swasthya-Sahayak`**.
+2. Click **Settings** (top tab) &rarr; in the left sidebar, click **Secrets and variables** &rarr; **Actions**.
+3. Click **New repository secret** and add the following 3 secrets:
+
+| Secret Name | Value | Instructions |
+|---|---|---|
+| `EC2_HOST` | `<YOUR-EC2-PUBLIC-IP>` | The public IP of your EC2 instance (e.g. `54.210.120.45`) |
+| `EC2_USER` | `ubuntu` | For Ubuntu 26.04 LTS, the default SSH user is `ubuntu` |
+| `EC2_SSH_KEY` | *(Paste full contents of `.pem` file)* | Open `swasthya-ec2-key.pem` in a text editor, copy all lines including `-----BEGIN RSA PRIVATE KEY-----` and `-----END RSA PRIVATE KEY-----` |
+| `EC2_PORT` | `22` *(Optional)* | SSH port (defaults to 22 if not specified) |
+
+---
+
+### Step 3.2: Trigger an Automated Deployment
+Now, whenever you push any changes to `main`:
+```bash
+git add .
+git commit -m "feat: my new feature"
+git push origin main
+```
+
+1. GitHub Actions automatically starts the workflow.
+2. It securely connects to your EC2 instance over SSH.
+3. It fetches the latest code with `git fetch origin main && git reset --hard origin/main`.
+4. It builds and restarts the backend container (`docker compose up -d --build`).
+5. It polls the healthcheck endpoint to ensure the app is healthy.
+6. It cleans up dangling Docker layers (`docker image prune -f`) so your disk space never runs out.
+
+> **Manual Trigger**: You can also trigger deployment on demand without pushing code by going to **GitHub** &rarr; **Actions** &rarr; **Deploy Backend & Redis to AWS EC2** &rarr; click **Run workflow**.
+
+---
+
+## Phase 4: Vercel Frontend Deployment
+
+### Step 4.1: Import into Vercel
+1. Log in to [vercel.com](https://vercel.com).
+2. Click **Add New...** &rarr; **Project**.
+3. Select your repository: **`Swasthya-Sahayak`**.
+4. Configure the Build & Development Settings:
    - **Framework Preset**: `Next.js`
-   - **Root Directory**: Click edit and select `client`
+   - **Root Directory**: Click edit &rarr; select **`client`** &rarr; click **Continue**.
    - **Build Command**: `npm run build`
    - **Output Directory**: `.next`
    - **Install Command**: `npm install`
 
 ---
 
-### Step 2.2: Add Environment Variables in Vercel
-In the Vercel **Environment Variables** panel, add:
+### Step 4.2: Configure Environment Variables on Vercel
+Under the **Environment Variables** section on Vercel, add:
 
 | Key | Value | Description |
 |---|---|---|
-| `NEXT_PUBLIC_API_URL` | `http://<EC2-PUBLIC-IP>:4000/api/v1` | URL of your EC2 backend API |
-
-> **Pro Tip**: If you map a custom domain with SSL to your EC2 instance (e.g. `https://api.yourdomain.com`), set `NEXT_PUBLIC_API_URL=https://api.yourdomain.com/api/v1`.
+| `NEXT_PUBLIC_API_URL` | `http://<YOUR-EC2-PUBLIC-IP>:4000/api/v1` | URL pointing to your live EC2 backend API |
 
 Click **Deploy**!
 
 ---
 
-## 3. Recommended: Zero-CORS Setup with Next.js Rewrites
-
-If you want **100% same-origin cookie handling** without worrying about browser third-party cookie restrictions or mixed content (HTTP vs HTTPS), you can proxy API calls directly through Vercel by adding a rewrite rule to [`client/next.config.ts`](file:///c:/Users/Sumit%20Kumar/Desktop/Swasthya%20Sahayak/client/next.config.ts):
+### Step 4.3: Recommended Zero-CORS Setup via Next.js Rewrites
+To achieve **100% same-origin cookie handling** and eliminate any third-party cookie restrictions between Vercel and EC2, configure a proxy rewrite in [`client/next.config.ts`](file:///c:/Users/Sumit%20Kumar/Desktop/Swasthya%20Sahayak/client/next.config.ts):
 
 ```ts
 import type { NextConfig } from "next";
 
-const EC2_BACKEND_URL = process.env.EC2_BACKEND_URL || "http://<EC2-PUBLIC-IP>:4000";
+const EC2_BACKEND_URL = process.env.EC2_BACKEND_URL || "http://<YOUR-EC2-PUBLIC-IP>:4000";
 
 const nextConfig: NextConfig = {
   reactCompiler: true,
@@ -170,94 +314,112 @@ const nextConfig: NextConfig = {
 export default nextConfig;
 ```
 
-With this rewrite:
-1. In Vercel, set `EC2_BACKEND_URL=http://<EC2-PUBLIC-IP>:4000`.
-2. In client, leave `NEXT_PUBLIC_API_URL=/api/v1`.
-3. The browser only talks to `https://your-app.vercel.app/api/v1/...`, which Vercel securely forwards to your EC2 backend.
-4. Zero CORS headers needed, zero third-party cookie warnings!
+With this configuration:
+1. In Vercel, set `EC2_BACKEND_URL=http://<YOUR-EC2-PUBLIC-IP>:4000`.
+2. In your frontend client, requests go to `/api/v1/...`.
+3. Vercel's edge network proxies the requests to your EC2 backend.
+4. Browsers treat all auth cookies as **first-party cookies**, guaranteeing 100% compatibility across Chrome, Safari, iOS, and Firefox.
 
 ---
 
-## 4. Automated CI/CD with GitHub Actions (Auto-Deploy on Git Push)
+## Phase 5: How to Update Environment Variables (`.env`) in the Future & Restart
 
-A complete automated CI/CD pipeline is configured in [`.github/workflows/deploy.yml`](file:///.github/workflows/deploy.yml). Every time you push code to the `main` branch, GitHub Actions will automatically connect to your EC2 instance over SSH, pull the latest commits, rebuild the backend container, and verify the healthcheck endpoint.
+Whenever you need to update a secret (such as a database password, Supabase key, or adding a new Vercel domain to `CORS_ORIGIN`):
 
-### Step 4.1: Add GitHub Repository Secrets
-1. On GitHub, navigate to your repository: **`IndSumit07/Swasthya-Sahayak`**.
-2. Click **Settings** (top tab) &rarr; **Secrets and variables** (left sidebar) &rarr; **Actions**.
-3. Click **New repository secret** and add the following 3 secrets:
-
-| Secret Name | Example Value | Description |
-|---|---|---|
-| `EC2_HOST` | `54.210.120.45` | Public IP or Public DNS of your EC2 instance |
-| `EC2_USER` | `ubuntu` | Default username for Ubuntu LTS (`ubuntu`) |
-| `EC2_SSH_KEY` | `-----BEGIN RSA PRIVATE KEY----- ...` | Entire contents of your `.pem` key pair file |
-| `EC2_PORT` | `22` *(Optional)* | Default SSH port (defaults to `22` if omitted) |
-
-> [!IMPORTANT]
-> When copying your private key into `EC2_SSH_KEY`, paste the **entire file** including:
-> ```
-> -----BEGIN RSA PRIVATE KEY-----
-> MIIEowIBAAKCAQEA...
-> -----END RSA PRIVATE KEY-----
-> ```
-> Make sure there are no accidental trailing spaces.
-
-### Step 4.2: How the Auto-Deploy Pipeline Works
-1. **Trigger**: Pushing code affecting `server/**` or `docker-compose.yml` to `main` automatically triggers the action.
-2. **Manual Trigger**: You can also trigger deployment on-demand anytime from the GitHub Actions tab by clicking **Deploy Backend & Redis to AWS EC2** &rarr; **Run workflow**.
-3. **Execution Steps**:
-   - Connects to EC2 via SSH using your key.
-   - Runs `git fetch origin main && git reset --hard origin/main` to sync code cleanly without merge conflicts.
-   - Preserves your existing `.env` on EC2.
-   - Runs `docker compose up -d --build --remove-orphans`.
-   - Polls `http://localhost:4000/api/v1/health` for up to 12 attempts to confirm the server booted successfully.
-   - Automatically prunes dangling Docker images (`docker image prune -f`) to save EC2 disk space.
-
----
-
-## 5. How to Update Environment Variables (`.env`) & Restart in the Future
-
-Whenever you need to change a database password, add a new Vercel domain to `CORS_ORIGIN`, or update Supabase keys, follow this quick 3-step process:
-
-### Step 5.1: SSH into your EC2 Instance
+### Step 5.1: SSH into your EC2 instance
 ```bash
-ssh -i /path/to/your-key.pem ubuntu@<EC2-PUBLIC-IP>
+ssh -i /path/to/swasthya-ec2-key.pem ubuntu@<YOUR-EC2-PUBLIC-IP>
 ```
 
-### Step 5.2: Navigate to Server and Edit `.env`
+### Step 5.2: Navigate to the Server Directory and Edit `.env`
 ```bash
 cd ~/Swasthya-Sahayak/server
 nano .env
 ```
-Use arrow keys to navigate to the variable you want to modify (e.g., updating `CORS_ORIGIN`, `DATABASE_URL`, or `MONGODB_URI`).
+- Update any required values (e.g. `CORS_ORIGIN="http://localhost:3000,https://my-app.vercel.app"`).
 - Save changes: Press **`Ctrl + O`**, then **`Enter`**.
 - Exit editor: Press **`Ctrl + X`**.
 
-### Step 5.3: Apply Changes and Restart the Backend
-Run the following single command:
+### Step 5.3: Apply Changes & Restart Backend with Zero Cache Loss
+Run this single command:
 
 ```bash
 docker compose up -d --no-deps backend
 ```
 
 > [!TIP]
-> **Why `--no-deps backend`?**
-> - It restarts **ONLY** the backend container with the updated `.env` values.
-> - **Redis is NOT restarted**, which means your in-memory cache, rate limits, and queue worker jobs are **never dropped** or interrupted!
-> - The restart takes only **1 to 2 seconds**.
+> **Why `--no-deps backend` is the best practice:**
+> 1. **Redis is NOT restarted**: All in-memory cached doctor searches, queue sequences, and BullMQ worker states are preserved without interruption.
+> 2. **Near Zero Downtime**: Docker recreates and swaps only the `swasthya-backend` container in ~2 seconds.
+> 3. **Instant Pickup**: Node.js immediately re-initializes with the updated `.env` values.
 
 ### Step 5.4: Verify the New Configuration
-Check the logs to verify the container picked up the changes and is running normally:
 ```bash
-# View the last 30 lines of backend logs
+# Check the latest 30 lines of logs
 docker compose logs --tail=30 backend
 
-# Verify health status
+# Confirm the healthcheck is passing
 curl http://localhost:4000/api/v1/health
 ```
-You should see:
-```json
-{"status":"healthy","uptime":5,"database":{"postgres":"connected","redis":"connected"}}
+
+---
+
+## Phase 6: Maintenance & Troubleshooting Cheatsheet
+
+### Check Running Services
+```bash
+docker compose ps
+```
+Should output:
+```text
+NAME                IMAGE               COMMAND                  SERVICE             CREATED             STATUS                    PORTS
+swasthya-backend    server-backend      "docker-entrypoint.s…"   backend             5 minutes ago       Up 5 minutes (healthy)    0.0.0.0:4000->4000/tcp
+swasthya-redis      redis:7-alpine      "docker-entrypoint.s…"   redis               5 minutes ago       Up 5 minutes (healthy)    127.0.0.1:6379->6379/tcp
 ```
 
+### View Live Container Logs
+```bash
+# Follow live backend logs
+docker compose logs -f backend
+
+# Follow Redis logs
+docker compose logs -f redis
+
+# View the last 100 lines of both
+docker compose logs --tail=100
+```
+
+### Run Database Seeds / Scripts on EC2
+To run database seeds or Prisma commands inside the running container:
+```bash
+docker compose exec backend npm run seed
+```
+
+### Interactive Redis CLI inside Container
+To inspect cache keys or queues:
+```bash
+docker compose exec redis redis-cli
+# Inside Redis CLI:
+# > ping
+# > keys *
+# > exit
+```
+
+### Disk Space Cleanup
+Over time, Docker build layers can accumulate. To safely clean up unused images without touching your active containers or volumes:
+```bash
+docker image prune -f
+```
+
+### Restart Everything
+```bash
+docker compose restart
+```
+
+### Full Rebuild from Scratch
+If you ever want to rebuild everything cleanly:
+```bash
+docker compose down
+docker compose up -d --build
+```
+*(Your Redis database volume `redis_data` is persistent and will not be lost unless you explicitly run `docker compose down -v`).*
