@@ -48,16 +48,16 @@ export default function DashboardPage() {
 
   return (
     <div
-      className="min-h-screen bg-[#FAFAFA] flex flex-col md:flex-row overflow-x-hidden max-w-full"
+      className="h-screen bg-[#FAFAFA] flex flex-col md:flex-row overflow-hidden max-w-full"
       style={{ fontFamily: "var(--font-quicksand, 'Quicksand', sans-serif)" }}
     >
       {/* Desktop Left Sidebar (Strictly Authorized Tabs Only) */}
       <DashboardSidebar user={user} activeTab={tab} setTab={setTab} />
 
       {/* Main Content Pane */}
-      <div className="flex-1 flex flex-col min-w-0 max-w-full overflow-x-hidden">
+      <div className="flex-1 flex flex-col min-w-0 max-w-full h-full overflow-hidden">
         {/* Top Header */}
-        <header className="bg-white border-b border-slate-200/80 px-4 sm:px-6 lg:px-8 py-3.5 sm:py-4 flex items-center justify-between gap-3 sticky top-0 z-30 shadow-2xs">
+        <header className="bg-white border-b border-slate-200/80 px-4 sm:px-6 lg:px-8 py-3.5 sm:py-4 flex items-center justify-between gap-3 shrink-0 z-30 shadow-2xs">
           <div className="flex items-center gap-3 min-w-0">
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -109,7 +109,7 @@ export default function DashboardPage() {
 
         {/* Mobile Navigation Drawer */}
         {mobileMenuOpen && (
-          <div className="md:hidden bg-[#0E4A43] text-white p-4 space-y-2 border-b border-white/10 shadow-lg animate-in fade-in slide-in-from-top-2 duration-150">
+          <div className="md:hidden bg-[#0E4A43] text-white p-4 space-y-2 border-b border-white/10 shadow-lg shrink-0 animate-in fade-in slide-in-from-top-2 duration-150">
             <div className="text-[10px] font-bold text-emerald-300 uppercase tracking-wider px-1">
               Authorized Menu ({roleMeta.title})
             </div>

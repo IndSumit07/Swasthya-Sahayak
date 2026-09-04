@@ -10,6 +10,7 @@ import {
   type Facility,
   type Referral,
 } from "@/lib/api";
+import { RegisterFacilityModal } from "@/components/facility/RegisterFacilityModal";
 import {
   Building2,
   Bed,
@@ -460,103 +461,15 @@ export function DistrictAdminDashboard({ user, activeTab, setTab }: DistrictAdmi
         </div>
       )}
 
-      {/* ─── REGISTER FACILITY MODAL ─────────────────────────────────────────── */}
-      {showFacModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 space-y-4 shadow-2xl border border-slate-200">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-black text-slate-900">Register Healthcare Facility</h3>
-              <button onClick={() => setShowFacModal(false)} className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center font-bold">
-                <X className="w-4 h-4 text-slate-500" />
-              </button>
-            </div>
-
-            {facMsg && (
-              <div className={`p-3 rounded-xl text-xs font-bold ${facMsg.type === "success" ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-800"}`}>
-                {facMsg.text}
-              </div>
-            )}
-
-            <form onSubmit={handleRegisterFacility} className="space-y-4 text-xs">
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Facility Name *</label>
-                <input
-                  type="text"
-                  required
-                  value={facName}
-                  onChange={(e) => setFacName(e.target.value)}
-                  placeholder="e.g. Primary Health Centre (PHC) Manchar"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-bold"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Facility Type *</label>
-                  <select
-                    value={facType}
-                    onChange={(e) => setFacType(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-bold"
-                  >
-                    <option value="SUB_CENTRE">Sub Centre</option>
-                    <option value="PHC">PHC</option>
-                    <option value="CHC">CHC</option>
-                    <option value="RURAL_HOSPITAL">Rural Hospital</option>
-                    <option value="DISTRICT_HOSPITAL">District Hospital</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Village / Taluka</label>
-                  <input
-                    type="text"
-                    value={facVillage}
-                    onChange={(e) => setFacVillage(e.target.value)}
-                    placeholder="e.g. Manchar"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-bold"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Total Beds</label>
-                  <input
-                    type="number"
-                    value={facTotalBeds}
-                    onChange={(e) => setFacTotalBeds(Number(e.target.value))}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-bold"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Available Beds</label>
-                  <input
-                    type="number"
-                    value={facAvailableBeds}
-                    onChange={(e) => setFacAvailableBeds(Number(e.target.value))}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-bold"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-2 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowFacModal(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-bold"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-6 py-2 rounded-xl bg-[#0E4A43] text-white font-bold hover:brightness-110 shadow-md"
-                >
-                  Register Facility
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* ─── REGISTER FACILITY MODAL (FR-05) ─────────────────────────────────── */}
+      <RegisterFacilityModal
+        isOpen={showFacModal}
+        onClose={() => setShowFacModal(false)}
+        onSuccess={() => {
+          fetchData();
+        }}
+        initialDistrict={districtName}
+      />
 
       {/* ─── PROVISION STAFF MODAL ───────────────────────────────────────────── */}
       {showStaffModal && (

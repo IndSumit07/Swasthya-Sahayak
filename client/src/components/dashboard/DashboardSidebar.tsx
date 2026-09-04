@@ -289,9 +289,9 @@ export function DashboardSidebar({ user, activeTab, setTab }: DashboardSidebarPr
   };
 
   return (
-    <aside className="w-64 shrink-0 hidden md:flex flex-col min-h-screen bg-[#0E4A43] text-white p-4 border-r border-[#0E4A43]/40 select-none">
+    <aside className="w-64 shrink-0 hidden md:flex flex-col h-screen sticky top-0 bg-[#0E4A43] text-white p-4 border-r border-[#0E4A43]/40 select-none overflow-hidden z-20">
       {/* Brand Header */}
-      <div className="px-2 py-4 mb-2">
+      <div className="px-2 py-3 mb-2 shrink-0">
         <Link href="/" className="flex items-center gap-2.5 group">
           <div className="w-9 h-9 rounded-2xl bg-[#E5F973] text-[#0E4A43] flex items-center justify-center font-black text-lg group-hover:scale-105 transition-transform shadow-xs">
             <Activity className="w-5 h-5 text-[#0E4A43]" />
@@ -304,7 +304,7 @@ export function DashboardSidebar({ user, activeTab, setTab }: DashboardSidebarPr
       </div>
 
       {/* User Role Card */}
-      <div className="p-3.5 rounded-2xl bg-white/10 backdrop-blur-xs border border-white/10 mb-6 space-y-1.5">
+      <div className="p-3.5 rounded-2xl bg-white/10 backdrop-blur-xs border border-white/10 mb-4 space-y-1.5 shrink-0">
         <div className="flex items-center justify-between">
           <span className="text-[11px] font-black uppercase text-[#E5F973] tracking-wide">
             {roleMeta.title}
@@ -316,7 +316,7 @@ export function DashboardSidebar({ user, activeTab, setTab }: DashboardSidebarPr
       </div>
 
       {/* Navigation Links */}
-      <div className="flex-1 space-y-1 overflow-y-auto">
+      <div className="flex-1 space-y-1 overflow-y-auto no-scrollbar [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <div className="px-3 py-1 text-[10px] font-black uppercase text-slate-300 tracking-wider">
           Workspace Navigation
         </div>
@@ -351,7 +351,7 @@ export function DashboardSidebar({ user, activeTab, setTab }: DashboardSidebarPr
       </div>
 
       {/* Footer / Quick Links */}
-      <div className="pt-4 border-t border-white/10 space-y-2">
+      <div className="pt-3 mt-auto border-t border-white/10 space-y-2 shrink-0">
         <Link
           href="/facilities"
           className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-200 hover:bg-white/10 hover:text-white transition-colors"

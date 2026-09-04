@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { adminApi, facilitiesApi, type UserProfile, type Facility } from "@/lib/api";
+import { RegisterFacilityModal } from "@/components/facility/RegisterFacilityModal";
 import {
   LayoutDashboard,
   Building2,
@@ -491,74 +492,15 @@ export function SuperAdminDashboard({ user, activeTab, setTab }: SuperAdminDashb
         </div>
       )}
 
-      {/* ─── REGISTER FACILITY MODAL ─────────────────────────────────────────── */}
-      {showFacModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 space-y-4 shadow-2xl border border-slate-200">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-black text-slate-900">Register Healthcare Facility</h3>
-              <button onClick={() => setShowFacModal(false)} className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:text-slate-900">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateFacility} className="space-y-4 text-xs">
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700">Facility Name *</label>
-                <input
-                  type="text"
-                  required
-                  value={facName}
-                  onChange={(e) => setFacName(e.target.value)}
-                  placeholder="e.g. Civil Hospital Nashik"
-                  className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700">Facility Type *</label>
-                  <select value={facType} onChange={(e) => setFacType(e.target.value)} className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900 font-bold">
-                    <option value="DISTRICT_HOSPITAL">District Hospital</option>
-                    <option value="CHC">CHC</option>
-                    <option value="PHC">PHC</option>
-                    <option value="RURAL_HOSPITAL">Rural Hospital</option>
-                    <option value="SUB_CENTRE">Sub Centre</option>
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700">District *</label>
-                  <select value={facDistrict} onChange={(e) => setFacDistrict(e.target.value)} className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900 font-bold">
-                    {MAHARASHTRA_DISTRICTS.filter((d) => d !== "ALL").map((d) => (
-                      <option key={d} value={d}>{d}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700">Total Beds</label>
-                  <input type="number" value={facTotalBeds} onChange={(e) => setFacTotalBeds(Number(e.target.value))} className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900" />
-                </div>
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700">Available Beds</label>
-                  <input type="number" value={facAvailableBeds} onChange={(e) => setFacAvailableBeds(Number(e.target.value))} className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900" />
-                </div>
-              </div>
-
-              <div className="pt-2 flex items-center justify-end gap-2">
-                <button type="button" onClick={() => setShowFacModal(false)} className="px-4 py-2.5 rounded-2xl text-slate-600 hover:bg-slate-100 font-bold">
-                  Cancel
-                </button>
-                <button type="submit" className="px-6 py-2.5 rounded-2xl bg-[#0E4A43] text-white font-black hover:brightness-110 shadow-md">
-                  Register Facility
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* ─── REGISTER FACILITY MODAL (FR-05) ─────────────────────────────────── */}
+      <RegisterFacilityModal
+        isOpen={showFacModal}
+        onClose={() => setShowFacModal(false)}
+        onSuccess={() => {
+          fetchStateData();
+        }}
+        initialDistrict={selectedDistrict !== "ALL" ? selectedDistrict : "Pune"}
+      />
     </div>
   );
 }

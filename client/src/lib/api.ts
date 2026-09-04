@@ -117,7 +117,24 @@ export const facilitiesApi = {
   getById: (id: string) =>
     apiFetch<{ success: boolean; data: Facility }>(`/facilities/${id}`),
 
-  create: (body: Omit<Partial<Facility>, 'services'> & { services?: string[]; totalBeds?: number; availableBeds?: number }) =>
+  getAvailabilityMatrix: (id: string) =>
+    apiFetch<{ success: boolean; data: AvailabilityMatrix }>(`/facilities/${id}/availability`),
+
+  getServicesCatalog: () =>
+    apiFetch<{ success: boolean; data: Array<{ name: string; category: string; facilityCount: number }> }>('/facilities/services/catalog'),
+
+  create: (body: Omit<Partial<Facility>, 'services' | 'medicines' | 'diagnostics' | 'slots'> & {
+    services?: string[];
+    totalBeds?: number;
+    availableBeds?: number;
+    oxygenBedsTotal?: number;
+    oxygenBedsAvailable?: number;
+    icuBedsTotal?: number;
+    icuBedsAvailable?: number;
+    medicines?: Array<{ medicineName: string; category?: string; quantity: number; unit?: string; stockThreshold?: number; isAvailable?: boolean }>;
+    diagnostics?: Array<{ testName: string; category?: string; isAvailable?: boolean; turnaroundHours?: number; costInr?: number }>;
+    slots?: Array<{ slotName: string; startTime?: string; endTime?: string; maxCapacity?: number; isAvailable?: boolean }>;
+  }) =>
     apiFetch<{ success: boolean; data: Facility }>('/facilities', { method: 'POST', body: body as unknown as Record<string, unknown> }),
 
   updateBeds: (id: string, body: Partial<FacilityBedStatus>) =>
@@ -126,8 +143,54 @@ export const facilitiesApi = {
   upsertMedicine: (id: string, body: Partial<FacilityMedicine>) =>
     apiFetch<{ success: boolean; data: FacilityMedicine }>(`/facilities/${id}/medicines`, { method: 'PATCH', body: body as unknown as Record<string, unknown> }),
 
+  toggleMedicine: (facilityId: string, medicineId: string, isAvailable?: boolean) =>
+    apiFetch<{ success: boolean; data: FacilityMedicine }>(`/facilities/${facilityId}/medicines/${medicineId}/toggle`, {
+      method: 'PATCH',
+      body: { isAvailable } as unknown as Record<string, unknown>,
+    }),
+
   upsertDiagnostic: (id: string, body: Partial<FacilityDiagnostic>) =>
     apiFetch<{ success: boolean; data: FacilityDiagnostic }>(`/facilities/${id}/diagnostics`, { method: 'PATCH', body: body as unknown as Record<string, unknown> }),
+
+  toggleDiagnostic: (facilityId: string, diagnosticId: string, isAvailable?: boolean) =>
+    apiFetch<{ success: boolean; data: FacilityDiagnostic }>(`/facilities/${facilityId}/diagnostics/${diagnosticId}/toggle`, {
+      method: 'PATCH',
+      body: { isAvailable } as unknown as Record<string, unknown>,
+    }),
+
+  toggleDoctorAvailability: (facilityId: string, doctorId: string, isAvailable: boolean) =>
+    apiFetch<{ success: boolean; data: DoctorProfile }>(`/facilities/${facilityId}/doctors/${doctorId}/availability`, {
+      method: 'PATCH',
+      body: { isAvailable } as unknown as Record<string, unknown>,
+    }),
+
+  upsertSlot: (facilityId: string, body: { id?: string; slotName: string; startTime?: string; endTime?: string; maxCapacity?: number; isAvailable?: boolean }) =>
+    apiFetch<{ success: boolean; data: FacilitySlot }>(`/facilities/${facilityId}/slots`, {
+      method: 'POST',
+      body: body as unknown as Record<string, unknown>,
+    }),
+
+  toggleSlot: (facilityId: string, slotId: string, isAvailable?: boolean) =>
+    apiFetch<{ success: boolean; data: FacilitySlot }>(`/facilities/${facilityId}/slots/${slotId}`, {
+      method: 'PATCH',
+      body: { isAvailable } as unknown as Record<string, unknown>,
+    }),
+
+  deleteSlot: (facilityId: string, slotId: string) =>
+    apiFetch<{ success: boolean; message: string }>(`/facilities/${facilityId}/slots/${slotId}`, {
+      method: 'DELETE',
+    }),
+
+  addService: (facilityId: string, name: string, category?: string) =>
+    apiFetch<{ success: boolean; data: FacilityService }>(`/facilities/${facilityId}/services`, {
+      method: 'POST',
+      body: { name, category } as unknown as Record<string, unknown>,
+    }),
+
+  deleteService: (facilityId: string, serviceId: string) =>
+    apiFetch<{ success: boolean; message: string }>(`/facilities/${facilityId}/services/${serviceId}`, {
+      method: 'DELETE',
+    }),
 };
 
 // ─── Appointments API ─────────────────────────────────────────────────────────
@@ -403,6 +466,69 @@ export interface FacilityService {
   isActive?: boolean;
 }
 
+export interface FacilitySlot {
+  id: string;
+  facilityId: string;
+  slotName: string;
+  startTime: string;
+  endTime: string;
+  maxCapacity: number;
+  isAvailable: boolean;
+  status?: string;
+}
+
+export interface AvailabilityMatrix {
+  facilityId: string;
+  facilityName: string;
+  facilityType: FacilityType;
+  district: string;
+  village: string | null;
+  workingHours: string | null;
+  beds: {
+    total: number;
+    available: number;
+    oxygenTotal: number;
+    oxygenAvailable: number;
+    icuTotal: number;
+    icuAvailable: number;
+    statusText: string;
+  };
+  doctors: Array<{
+    id: string;
+    fullName: string;
+    specialty: string;
+    qualification: string;
+    isAvailable: boolean;
+    status: string;
+  }>;
+  diagnostics: Array<{
+    id: string;
+    testName: string;
+    category: string | null;
+    isAvailable: boolean;
+    turnaroundHours: number;
+    costInr: number;
+    status: string;
+  }>;
+  medicines: Array<{
+    id: string;
+    medicineName: string;
+    category: string | null;
+    quantity: number;
+    unit: string;
+    stockThreshold: number;
+    isAvailable: boolean;
+    status: string;
+  }>;
+  slots: Array<FacilitySlot>;
+  summaryMatrix: Array<{
+    item: string;
+    category: 'DOCTOR' | 'DIAGNOSTIC' | 'MEDICINE' | 'BED' | 'SLOT';
+    status: string;
+    isAvailable: boolean;
+  }>;
+}
+
 export interface Facility {
   id: string;
   name: string;
@@ -422,6 +548,7 @@ export interface Facility {
   medicines?: FacilityMedicine[];
   diagnostics?: FacilityDiagnostic[];
   doctors?: DoctorProfile[];
+  slots?: FacilitySlot[];
 }
 
 export interface DoctorProfile {
@@ -430,6 +557,7 @@ export interface DoctorProfile {
   specialty: string | null;
   qualification: string | null;
   registrationNo: string | null;
+  isAvailable?: boolean;
   facilityId?: string | null;
   facility?: Facility | null;
   user?: {
